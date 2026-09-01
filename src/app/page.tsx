@@ -44,7 +44,7 @@ export default function Home() {
                 любой OpenAI совместимой модели.
               </p>
             </div>
-            <div id="chat" className="rise-in-delayed mt-4 min-h-0 w-full flex-1 scroll-mt-24">
+            <div id="chat" className="rise-in-delayed mx-auto mt-4 min-h-0 w-full max-w-[1000px] flex-1 scroll-mt-24">
               <Chat model={model} />
             </div>
           </section>
