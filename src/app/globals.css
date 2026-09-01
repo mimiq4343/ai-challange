@@ -1,0 +1,97 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/*
+ * Тема зафиксирована тёмной: страница задумана как единый dark-tech плейграунд.
+ * Акцент один: электрик-синий (--accent), для заливок кнопок используется
+ * более тёмный --accent-deep ради контраста WCAG AA с белым текстом.
+ */
+:root {
+  --background: #0b0c10;
+  --surface: #12141a;
+  --foreground: #e7e9ee;
+  --muted: #99a1af;
+  --accent: #4d6bfe;
+  --accent-deep: #3050e8;
+  --line: rgba(231, 233, 238, 0.09);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
+  --color-line: var(--line);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(231, 233, 238, 0.18) transparent;
+}
+
+/* Markdown в ответах модели: типографика поверх prose-invert под тему чата */
+.chat-md {
+  @apply prose prose-sm prose-invert max-w-none;
+}
+.chat-md :where(p, ul, ol, blockquote) {
+  margin-block: 0.5rem;
+}
+.chat-md :where(h1, h2, h3, h4) {
+  margin-block: 0.9rem 0.4rem;
+}
+.chat-md :where(pre) {
+  margin-block: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--background);
+}
+.chat-md :where(code):not(:where(pre code)) {
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.375rem;
+  background: rgba(231, 233, 238, 0.1);
+  font-weight: 500;
+}
+.chat-md :where(code)::before,
+.chat-md :where(code)::after {
+  content: none;
+}
+.chat-md :where(a) {
+  color: var(--accent);
+}
+.chat-md :where(table) {
+  display: block;
+  overflow-x: auto;
+  font-size: 0.85em;
+}
+.chat-md :where(th, td) {
+  border-color: var(--line);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise-in {
+    animation: rise-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .rise-in-delayed {
+    animation: rise-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+  }
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
