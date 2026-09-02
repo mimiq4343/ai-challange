@@ -1,39 +1,47 @@
-# Flash Chat
+# AI Advent Challenge #9
 
-Проект для челленджа **AI Advent Challenge #9**, задание **Day 1**.
 Автор: **Roman Sukhin** (@mimiq43).
 
-Лендинг-плейграунд для диалога с любой OpenAI-совместимой моделью (DeepSeek,
-OpenAI, OpenRouter, Ollama и т.п.): стриминговые ответы через серверный маршрут
-Next.js, API-ключ не покидает сервер.
+Репозиторий участия в челлендже **AI Advent Challenge #9**: одно
+Next.js-приложение, задание каждого дня делается в отдельной ветке и вливается
+в main по мере готовности. Подробный README каждого дня лежит в его ветке.
 
-Стек: Next.js 16 (App Router), TypeScript, Tailwind CSS v4.
+Стек: Next.js 16 (App Router), TypeScript, Tailwind CSS v4. Работает с любым
+OpenAI-совместимым API (DeepSeek, OpenAI, OpenRouter, Ollama и т.п.).
 
-## Запуск
+## Структура веток
+
+| Ветка   | Что в ней                                                  |
+| ------- | ---------------------------------------------------------- |
+| `main`  | Стабильная версия приложения (сейчас Day 1) + этот README  |
+| `day-1` | Day 1 «Лендинг-чат»                                        |
+| `day-2` | Day 2 «Формат ответа»                                      |
+
+## Хронология
+
+### Day 1 · Лендинг-чат — ветка `day-1`, страница `/`
+
+Flash Chat: лендинг с полноэкранным чатом для любой OpenAI-совместимой модели.
+Стриминг ответов по SSE, Markdown-рендер, остановка генерации, кнопка «Новый
+диалог». Ключ и конфиг провайдера в `.env.local`, в браузер не попадают; имя
+модели на странице показывается динамически из env.
+
+### Day 2 · Формат ответа — ветка `day-2`, страница `/day-2`
+
+Один и тот же запрос уходит дважды и сравнивается бок о бок: без ограничений
+против тематического агента «Кино-консьерж» с жёстким контролем ответа
+(`response_format: json_object`, `max_tokens: 600`, `stop: ["END"]`,
+`thinking: disabled`, system prompt со схемой ответа). Вопрос не по теме кино
+получает JSON-отказ `{"status":"refused", ...}`.
+
+## Запуск любого дня
 
 ```bash
+git checkout day-N           # нужный день, например day-2
 cp .env.example .env.local   # заполните OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MODEL
 npm install
 npm run dev
 ```
 
-Приложение поднимется на http://localhost:3000.
-
-## Конфигурация (.env.local)
-
-- `OPENAI_BASE_URL` — базовый URL провайдера, например `https://api.deepseek.com/v1`.
-- `OPENAI_API_KEY` — ключ API.
-- `OPENAI_MODEL` — имя модели, например `deepseek-v4-flash`. Показывается на
-  сайте динамически.
-
-## Как устроено
-
-- `src/app/page.tsx` — лендинг с встроенным чатом; имя модели берётся из env на
-  каждый запрос.
-- `src/components/chat.tsx` — клиентский чат на весь первый экран: стриминг,
-  остановка генерации, кнопка «Новый диалог», состояния пустого диалога и
-  ошибок; ответы модели рендерятся как Markdown (react-markdown + remark-gfm,
-  стили — @tailwindcss/typography).
-- `src/app/api/chat/route.ts` — серверный маршрут: проксирует запрос в
-  OpenAI-совместимый API (`stream: true`), превращает SSE в текстовый поток.
-  Без заполненного env отвечает явной ошибкой.
+- Day 1: http://localhost:3000/
+- Day 2: http://localhost:3000/day-2
