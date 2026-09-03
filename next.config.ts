@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   // (/_next/hmr и чанки) для стороннего origin, и страница остаётся
   // негидрированной — кнопки не реагируют.
   allowedDevOrigins: ["10.43.228.200"],
+  // Правила для агентов лежат в общей конфигурации разработчика, поэтому
+  // автогенерация AGENTS.md и CLAUDE.md в корне репозитория не нужна.
+  agentRules: false,
 };
 
 export default nextConfig;
