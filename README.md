@@ -57,6 +57,11 @@ npm install
 npm run dev
 ```
 
+Если открывать приложение по сетевому адресу машины, а не с неё самой, этот
+адрес должен быть перечислен в `allowedDevOrigins` в `next.config.ts` (начиная с
+ветки `day-3` там уже есть такая настройка): Next 16 блокирует dev-ресурсы для
+чужого origin, и страница приходит негидрированной.
+
 - Day 1: http://localhost:3000/
 - Day 2: http://localhost:3000/day-2
 - Day 3: http://localhost:3000/day-3
