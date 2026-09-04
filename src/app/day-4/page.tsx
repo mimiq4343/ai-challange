@@ -5,7 +5,7 @@ import { TemperatureLab } from "@/components/temperature-lab";
 export const metadata: Metadata = {
   title: "Flash Chat · Day 4",
   description:
-    "Задание Day 4: один запрос при temperature 0, 0.7 и 1.2 — точность, креативность и разнообразие ответов.",
+    "Задание Day 4: один запрос при temperature 0, 0.7 и 1.7 — точность, креативность и разнообразие ответов.",
 };
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export default function Day4() {
               Один и тот же запрос уходит по три раза при{" "}
               <span className="font-mono text-foreground">temperature 0</span>,{" "}
               <span className="font-mono text-foreground">0.7</span> и{" "}
-              <span className="font-mono text-foreground">1.2</span>: повторы нужны, чтобы
+              <span className="font-mono text-foreground">1.7</span>: повторы нужны, чтобы
               разнообразие можно было измерить, а не только заметить. Точность сверяется с
               эталоном, креативность и связность оценивает отдельный запрос-судья при нулевой
               температуре. Модель <span className="font-mono text-foreground">{model}</span>.

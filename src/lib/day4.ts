@@ -12,7 +12,7 @@ export type TemperatureSetting = {
 export const DAY4_TEMPERATURES: TemperatureSetting[] = [
   { value: 0, label: "0", tagline: "Жадный выбор токена: ответ почти детерминирован." },
   { value: 0.7, label: "0.7", tagline: "Умеренный разброс: формулировки гуляют, смысл держится." },
-  { value: 1.2, label: "1.2", tagline: "Широкий разброс: редкие токены получают шанс." },
+  { value: 1.7, label: "1.7", tagline: "Экстремальный разброс: в выборку попадают заведомо маловероятные токены." },
 ];
 
 export type Task = {
