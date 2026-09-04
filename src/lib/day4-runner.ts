@@ -4,6 +4,7 @@
 import {
   ANSWER_RULE,
   DAY4_SAMPLING,
+  DAY4_SYSTEM,
   JUDGE_SYSTEM,
   judgeRequest,
   parseJudge,
@@ -48,7 +49,7 @@ export function runSample(
 ): Promise<string> {
   const content = task.accept.length > 0 ? `${task.prompt}\n\n${ANSWER_RULE}` : task.prompt;
   return streamCall(
-    { messages: [{ role: "user", content }], temperature, ...DAY4_SAMPLING },
+    { messages: [{ role: "user", content }], system: DAY4_SYSTEM, temperature, ...DAY4_SAMPLING },
     signal,
     onDelta,
   );
