@@ -17,6 +17,11 @@ const RECOMMENDATIONS = [
     watch: "Формулировки гуляют, факты обычно держатся; для проверяемых задач всё равно нужна сверка.",
   },
   {
+    label: "temperature 1.2",
+    when: "Черновики идей и вариативные тексты: несколько заходов на один и тот же абзац, разные подачи одной мысли.",
+    watch: "Фактические ответы ещё держатся, но формулировки уже разъезжаются настолько, что результат стоит вычитывать.",
+  },
+  {
     label: "temperature 1.7",
     when: "Брейншторм коротких формулировок: слоганы, названия, метафоры, варианты заголовков — когда нужен пул идей и человек отбирает лучшее.",
     watch: "Ломается даже школьная арифметика, рассуждения путаются и раздуваются, связность падает — для фактических задач настройка непригодна.",
@@ -123,7 +128,7 @@ export function TemperatureSummary({
         .
       </p>
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
         {RECOMMENDATIONS.map((item) => (
           <article key={item.label} className="rounded-xl border border-line bg-background p-3">
             <h3 className="font-mono text-xs font-semibold text-accent">{item.label}</h3>

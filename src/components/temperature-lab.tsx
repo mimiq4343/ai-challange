@@ -201,7 +201,7 @@ export function TemperatureLab() {
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
                   rows={3}
-                  placeholder="Запрос, который уйдёт при всех трёх температурах"
+                  placeholder="Запрос, который уйдёт при всех четырёх температурах"
                   aria-label="Свой запрос"
                   className="w-full resize-y rounded-xl border border-line bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted/70 focus:border-accent/50 focus:outline-none"
                 />
@@ -239,7 +239,7 @@ export function TemperatureLab() {
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         {DAY4_TEMPERATURES.map((setting, index) => (
           <TemperatureColumn
             key={setting.value}
