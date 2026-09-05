@@ -1,4 +1,5 @@
 import { Chat } from "@/components/chat";
+import { SiteHeader } from "@/components/site-header";
 
 // Имя модели читается из env на каждый запрос, без пересборки страницы.
 export const dynamic = "force-dynamic";
@@ -13,19 +14,7 @@ export default function Home() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[85vh] bg-[radial-gradient(70vw_60vh_at_68%_10%,rgba(77,107,254,0.14),transparent_70%)]"
       />
       <div className="w-full px-[clamp(1rem,3vw,4rem)]">
-        <header className="flex h-16 items-center justify-between">
-          <a href="#" className="flex items-center gap-2 font-semibold tracking-tight">
-            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-accent-deep text-sm font-bold text-white">
-              F
-            </span>
-            Flash Chat
-          </a>
-          <nav className="flex items-center gap-6 text-sm text-muted">
-            <a href="#features" className="transition-colors hover:text-foreground">
-              Возможности
-            </a>
-          </nav>
-        </header>
+        <SiteHeader />
 
         <main>
           <section className="flex h-[calc(100dvh-4rem)] min-h-[560px] flex-col pb-5">
