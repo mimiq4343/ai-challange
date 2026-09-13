@@ -12,6 +12,7 @@
 - Keep previous day routes and APIs working unless the task explicitly replaces them.
 - Do not commit `.env.local`, API keys, `data/*.sqlite`, `data/*.sqlite-wal`, or `data/*.sqlite-shm`.
 - Prefer focused edits. Do not introduce a second convention beside an existing implementation.
+- Keep an existing development server running after checks. If a branch switch or production build requires stopping it, start it again and report the network URL.
 
 ## Application boundaries
 

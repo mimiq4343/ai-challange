@@ -98,6 +98,13 @@ POST   /api/conversations/:id/messages
 
 ## Запуск
 
+В `main` доступны все завершённые страницы. Для точного снимка конкретного дня
+переключитесь на его ветку перед запуском:
+
+```bash
+git checkout day-N
+```
+
 ```bash
 npm install
 cp .env.example .env.local
