@@ -67,6 +67,7 @@ export function ConversationWorkspace({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const transientExchangeIdRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -216,8 +217,9 @@ export function ConversationWorkspace({
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     let conversationId = activeId;
-    const userId = `user-${crypto.randomUUID()}`;
-    const assistantId = `assistant-${crypto.randomUUID()}`;
+    const exchangeId = ++transientExchangeIdRef.current;
+    const userId = `user-pending-${exchangeId}`;
+    const assistantId = `assistant-pending-${exchangeId}`;
 
     try {
       if (!conversationId) {
