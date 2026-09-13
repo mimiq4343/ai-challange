@@ -48,7 +48,7 @@ export default function Day7() {
               продолжайте с того же места.
             </p>
           </div>
-          <div className="rise-in-delayed min-h-0 flex-1">
+          <div className="min-h-0 flex-1">
             <ConversationWorkspace
               initialConversations={initialConversations}
               initialDetail={initialDetail}
