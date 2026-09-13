@@ -4,6 +4,7 @@ const NAV_LINKS = [
   { href: "/#features", label: "Возможности" },
   { href: "/day-5", label: "Day 5" },
   { href: "/day-6", label: "Day 6" },
+  { href: "/day-7", label: "Day 7" },
 ];
 
 export function SiteHeader() {
