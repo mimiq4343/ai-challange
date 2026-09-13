@@ -6,6 +6,10 @@ import remarkGfm from "remark-gfm";
 import { Lightning, PaperPlaneRight, Plus, Stop } from "@phosphor-icons/react";
 
 type Message = { role: "user" | "assistant"; content: string };
+type ChatProps = {
+  model: string | null;
+  agentName?: string;
+};
 
 const EXAMPLE_PROMPTS = [
   "Объясни event loop в JavaScript в трёх абзацах",
@@ -13,7 +17,7 @@ const EXAMPLE_PROMPTS = [
   "Предложи структуру README для pet-проекта",
 ];
 
-export function Chat({ model }: { model: string | null }) {
+export function Chat({ model, agentName }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -102,7 +106,9 @@ export function Chat({ model }: { model: string | null }) {
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_24px_80px_rgba(3,5,16,0.5)]">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <span className="font-mono text-xs text-muted">{model ?? "модель не задана"}</span>
+        <span className="font-mono text-xs text-muted">
+          {agentName ? `${agentName} · ${model ?? "модель не задана"}` : (model ?? "модель не задана")}
+        </span>
         {messages.length > 0 && !streaming && (
           <button
             type="button"
@@ -184,8 +190,8 @@ export function Chat({ model }: { model: string | null }) {
           onKeyDown={onKeyDown}
           enterKeyHint="send"
           rows={1}
-          placeholder="Сообщение для модели"
-          aria-label="Сообщение для модели"
+          placeholder={agentName ? "Сообщение агенту" : "Сообщение для модели"}
+          aria-label={agentName ? "Сообщение агенту" : "Сообщение для модели"}
           className="flex-1 resize-none rounded-xl border border-line bg-background px-3 py-2.5 text-sm leading-relaxed placeholder:text-muted/70 focus:border-accent/50 focus:outline-none"
         />
         {streaming ? (
