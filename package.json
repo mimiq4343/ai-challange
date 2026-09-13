@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:persistence": "tsx --test tests/conversation-store.test.ts"
+    "test:persistence": "tsx --test tests/conversation-store.test.ts tests/persistent-chat-agent.test.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
