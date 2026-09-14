@@ -43,7 +43,7 @@ Invoke it once after a successful response and before reading the stream. Keep t
 
 - [ ] **Step 3: Preserve interaction behavior**
 
-Conversation create/select/delete, empty state, composer shortcuts, abort/error rendering, token badges, desktop sidebar and mobile drawer stay unchanged. A successful compressed stream emits `onExchangeComplete` only after clean completion, so Day 9 refreshes persisted analytics after SQLite commit.
+Conversation create/select/delete, empty state, composer shortcuts, abort/error rendering, token badges and existing chat sidebar stay unchanged. A successful compressed stream emits `onExchangeComplete` only after clean completion, so Day 9 refreshes persisted analytics after SQLite commit.
 
 - [ ] **Step 4: Run focused workspace checks**
 
@@ -99,7 +99,7 @@ Disable repeated submission while running, expose errors near the trigger, maint
 
 - [ ] **Step 3: Compose Day9Workspace from the Day 8 shell**
 
-Reuse Day 8 layout proportions, sidebar/chat composition, desktop analytics rail, mobile sheet, backdrop, focus trap/return and safe-area padding. Configure:
+Reuse Day 8 desktop layout proportions and chat composition. По прямому указанию пользователя отдельная mobile adaptation не создаётся: без Day 9 mobile sheet, focus trap и breakpoint-specific controls. На узкой ширине desktop analytics rail скрыт, а чат остаётся работоспособным без горизонтального overflow. Configure:
 
 ```tsx
 <ConversationWorkspace
@@ -122,14 +122,13 @@ Render only `CompressionAnalyticsPanel` and `CompressionBenchmarkPanel` in the a
 
 - [ ] **Step 5: Update navigation atomically**
 
-Add `{ href: "/day-9", label: "Day 9" }` to the existing challenge-day list in `site-header.tsx`. Do not remove or rename any earlier route. Verify active-state and horizontal scrolling at mobile width.
+Add `{ href: "/day-9", label: "Day 9" }` to the existing challenge-day list in `site-header.tsx`. Do not remove or rename any earlier route.
 
 - [ ] **Step 6: Apply the established Day 8 visual contract**
 
 Use `ui-ux-pro-max` implementation guidance because Day 9 explicitly extends the existing Day 8 Flash Chat surface. Preserve colors, typography, border radii, density and motion; add no second dashboard theme, gradients or card-inside-card nesting. Ensure:
 
 - desktop analytics remains readable at 1440×900;
-- mobile 390×844 opens/closes the analytics sheet and restores focus;
 - every interactive target is at least 44×44 px;
 - `:focus-visible` is present;
 - long JSON answers, rationale and summary wrap without horizontal overflow;
@@ -206,18 +205,14 @@ From the Day 9 confirmation flow, execute exactly one benchmark. Verify the serv
 
 Do not repeat a successful real benchmark merely to improve scores.
 
-- [ ] **Step 6: Verify desktop and mobile surfaces in a real browser**
+- [ ] **Step 6: Verify the desktop surface in a real browser**
 
 At 1440×900:
 
 - open `/day-9`, select the real conversation and inspect analytics/benchmark;
 - verify chat, desktop analytics rail, summary disclosure, long JSON wrapping, loading/error-free console and no overflow.
 
-At 390×844:
-
-- open/close the analytics sheet by keyboard and pointer;
-- verify focus trap/return, Escape close, backdrop behavior and 44×44 px controls;
-- check header horizontal navigation and document `scrollWidth <= clientWidth`.
+At 390×844 perform only a breakage check required by the repository: the chat remains usable and `scrollWidth <= clientWidth`. Do not add or assess a dedicated mobile analytics composition.
 
 Capture temporary screenshots outside the repository and remove them after inspection.
 

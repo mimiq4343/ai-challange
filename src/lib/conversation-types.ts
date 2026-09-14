@@ -47,6 +47,11 @@ export type ChatAgentResponse = {
   usage: Promise<ProviderTokenUsage | null>;
 };
 
+export type ChatRequestOptions = {
+  systemMessages?: readonly string[];
+  maxOutputTokens?: number;
+};
+
 export type ExchangeUsageInput = TokenBreakdown & {
   model: string;
   responseTokens: number;
