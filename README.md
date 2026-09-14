@@ -4,8 +4,8 @@
 
 Одно Next.js-приложение для заданий **AI Advent Challenge #9**. Каждый день
 разрабатывается в отдельной ветке и вливается в `main` после проверки. В `main`
-стабильна версия Day 7; ветка `day-8` добавляет измерение токенов, стоимости и
-переполнения контекстного окна.
+стабильна версия Day 7; ветки `day-8` и `day-9` добавляют измерение токенов и
+incremental compression истории.
 
 Стек: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4 и встроенный
 `node:sqlite`. Требуется Node.js **22.13 или новее**. LLM подключается через
@@ -24,6 +24,7 @@
 | `day-6` | Day 6 «Первый агент»                             |
 | `day-7` | Day 7 «Сохранение контекста между запусками»     |
 | `day-8` | Day 8 «Токены и переполнение контекста»            |
+| `day-9` | Day 9 «Сжатие истории без потери памяти»          |
 
 ## Хронология
 
@@ -100,7 +101,14 @@ embedding vector не сохраняются и не логируются.
 Сохранённый outcome — `rejected`, provider token count отсутствует, длительность
 849 ms, стоимость $0.
 
-## SQLite и API Day 7–8
+### Day 9 · Сжатие истории — страница `/day-9`
+
+Полная история остаётся в SQLite. Старые сообщения сворачиваются immutable
+checkpoint-ами по 10 сообщений, а модели передаются summary и несжатый buffer.
+Provider usage измеряет экономию; отдельный benchmark делает ровно четыре
+последовательных LLM-вызова и слепо сравнивает full/compressed ответы.
+
+## SQLite и API Day 7–9
 
 История создаётся автоматически в `data/chat.sqlite`. SQLite работает в
 WAL-режиме, foreign keys включены. Таблицы `conversations` и `messages` связаны
@@ -118,6 +126,13 @@ POST   /api/conversations/:id/messages
 GET  /api/conversations/:id/usage
 GET  /api/token-experiments/comparison
 POST /api/token-experiments/overflow
+```
+
+```text
+POST /api/conversations/:id/compressed-messages
+GET  /api/conversations/:id/compression
+POST /api/compression-experiments
+GET  /api/compression-experiments/latest
 ```
 
 Day 8 добавляет STRICT-таблицы `exchange_usage` и `overflow_runs`. Сообщения и
@@ -170,14 +185,16 @@ OPENROUTER_API_KEY=sk-or-...
 - Day 6: http://localhost:3000/day-6
 - Day 7: http://localhost:3000/day-7
 - Day 8: http://localhost:3000/day-8
+- Day 9: http://localhost:3000/day-9
 
 Если приложение открывается по сетевому адресу машины, этот origin должен быть
 разрешён в `allowedDevOrigins` файла `next.config.ts`.
 
-## Проверка Day 8
+## Проверка Day 8–9
 
 ```bash
 npm run test:tokens
+npm run test:compression
 npm run test:persistence
 npm run lint
 npx tsc --noEmit
@@ -198,7 +215,7 @@ usage, аналитику legacy-обменов и классификацию ov
    outcome в UI с последней записью `overflow_runs`.
 5. Проверить, что `/day-6` и `/day-7` продолжают открываться.
 
-## Структура Day 7 и Day 8
+## Структура Day 7–9
 
 ```text
 src/
@@ -207,12 +224,16 @@ src/
     api/token-experiments/              comparison и реальный overflow
     day-7/page.tsx                      серверная загрузка постоянного чата
     day-8/page.tsx                      чат с token analytics
+    day-9/page.tsx                      чат с compression analytics
   components/
     conversation-sidebar.tsx            список, создание и удаление
     conversation-workspace.tsx          чат, stream и token badges
     day8-workspace.tsx                  синхронизация чата и аналитики
     token-analytics-panel.tsx           рост контекста и стоимость
     token-comparison.tsx                short/long/overflow сравнение
+    day9-workspace.tsx                  compressed chat и benchmark
+    compression-analytics-panel.tsx     operational savings
+    compression-benchmark-panel.tsx     blind judge
   lib/
     chat-agent.ts                       вызов LLM и provider usage
     conversation-store.ts               SQLite и атомарные транзакции
@@ -221,9 +242,15 @@ src/
     overflow-experiment.ts              один OpenRouter Embeddings запрос
     persistent-chat-agent.ts            preflight и сохранение обмена
     token-analytics.ts                   timeline и legacy estimates
+    compressed-chat-agent.ts            summary + raw buffer
+    history-summarizer.ts               immutable checkpoints
+    compression-benchmark.ts            четыре LLM-вызова и judge
     token-cost.ts                        тарифы в целых micro-USD
     token-counter.ts                     локальные official tokenizers
 tests/
+  history-compression.test.ts
+  compressed-chat-agent.test.ts
+  compression-benchmark.test.ts
   chat-agent-usage.test.ts
   conversation-store.test.ts
   conversation-usage.test.ts

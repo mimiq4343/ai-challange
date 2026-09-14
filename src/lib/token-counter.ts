@@ -60,17 +60,26 @@ export async function countTextTokens(
 }
 
 export async function countChatPrompt(input: {
-  systemPrompt?: string;
-  history: ChatMessage[];
+  systemMessages?: readonly string[];
+  history: readonly ChatMessage[];
   request: string;
   contextLimit?: number;
   reservedOutputTokens?: number;
 }): Promise<TokenBreakdown> {
-  const systemPrompt = input.systemPrompt ?? CHAT_SYSTEM_PROMPT;
+  const systemContents = input.systemMessages ?? [CHAT_SYSTEM_PROMPT];
+  if (
+    systemContents.length === 0 ||
+    systemContents.some((message) => typeof message !== "string" || !message.trim())
+  ) {
+    throw new TypeError("Список system messages должен содержать непустые строки.");
+  }
   const contextLimit = input.contextLimit ?? DEEPSEEK_FLASH_PROFILE.contextWindow;
   const reservedOutputTokens =
     input.reservedOutputTokens ?? DEEPSEEK_FLASH_PROFILE.responseReserveTokens;
-  const systemMessages = [{ role: "system" as const, content: systemPrompt }];
+  const systemMessages = systemContents.map((content) => ({
+    role: "system" as const,
+    content,
+  }));
   const historyMessages = [...systemMessages, ...input.history];
   const fullMessages = [
     ...historyMessages,

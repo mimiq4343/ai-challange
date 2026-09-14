@@ -1,4 +1,8 @@
-import type { ChatAgentResponse, ProviderTokenUsage } from "./conversation-types";
+import type {
+  ChatAgentResponse,
+  ChatRequestOptions,
+  ProviderTokenUsage,
+} from "./conversation-types";
 import { getLiveModelProfile } from "./model-profiles";
 
 export type ChatMessage = {
@@ -158,8 +162,9 @@ export class ChatAgent {
   }
 
   async respond(
-    messages: ChatMessage[],
+    messages: readonly ChatMessage[],
     signal: AbortSignal,
+    options?: ChatRequestOptions,
   ): Promise<ChatAgentResponse> {
     const url = `${this.config.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     let profile;
@@ -170,6 +175,27 @@ export class ChatAgent {
         error instanceof Error ? error.message : "Неизвестная модель.",
         "configuration",
         { cause: error },
+      );
+    }
+    const systemMessages = options?.systemMessages ?? [CHAT_SYSTEM_PROMPT];
+    const maxOutputTokens = options?.maxOutputTokens ?? profile.responseReserveTokens;
+    if (
+      systemMessages.length === 0 ||
+      systemMessages.some((message) => typeof message !== "string" || !message.trim())
+    ) {
+      throw new ChatAgentError(
+        "Список system messages должен содержать непустые строки.",
+        "configuration",
+      );
+    }
+    if (
+      !Number.isSafeInteger(maxOutputTokens) ||
+      maxOutputTokens <= 0 ||
+      maxOutputTokens > profile.maxOutputTokens
+    ) {
+      throw new ChatAgentError(
+        "Лимит ответа должен быть допустимым положительным целым числом.",
+        "configuration",
       );
     }
     let response: Response;
@@ -183,10 +209,13 @@ export class ChatAgent {
         },
         body: JSON.stringify({
           model: this.config.model,
-          messages: [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...messages],
+          messages: [
+            ...systemMessages.map((content) => ({ role: "system" as const, content })),
+            ...messages,
+          ],
           stream: true,
           stream_options: { include_usage: true },
-          max_tokens: profile.responseReserveTokens,
+          max_tokens: maxOutputTokens,
         }),
         signal,
       });

@@ -11,6 +11,17 @@ import type {
   StoredExchangeUsage,
   StoredMessage,
 } from "./conversation-types";
+import type {
+  ExchangeCompressionInput,
+  StoredExchangeCompression,
+  SummaryCheckpoint,
+  SummaryCheckpointInput,
+} from "./compression-types";
+import {
+  mapSummary,
+  type ExchangeCompressionRow,
+  type SummaryRow,
+} from "./conversation-compression-rows";
 
 const NEW_CONVERSATION_TITLE = "Новый диалог";
 const TITLE_LENGTH = 60;
@@ -66,6 +77,7 @@ type OverflowRunRow = {
   created_at: string;
 };
 
+
 export class ConversationNotFoundError extends Error {
   readonly conversationId: string;
 
@@ -75,17 +87,24 @@ export class ConversationNotFoundError extends Error {
     this.conversationId = conversationId;
   }
 }
-
-
 export class SqliteConversationStore {
   private readonly database: DatabaseSync;
   private readonly listConversationsStatement: StatementSync;
   private readonly insertConversationStatement: StatementSync;
   private readonly getConversationStatement: StatementSync;
   private readonly getMessagesStatement: StatementSync;
+  private readonly getMessagesAfterStatement: StatementSync;
   private readonly insertMessageStatement: StatementSync;
   private readonly insertUsageStatement: StatementSync;
   private readonly getUsageStatement: StatementSync;
+  private readonly insertSummaryStatement: StatementSync;
+  private readonly getLatestSummaryStatement: StatementSync;
+  private readonly getSummariesStatement: StatementSync;
+  private readonly getMessageConversationStatement: StatementSync;
+  private readonly countMessagesThroughStatement: StatementSync;
+  private readonly getSummaryConversationStatement: StatementSync;
+  private readonly insertCompressionStatement: StatementSync;
+  private readonly getCompressionStatement: StatementSync;
   private readonly insertOverflowRunStatement: StatementSync;
   private readonly getLatestOverflowRunStatement: StatementSync;
   private readonly updateConversationStatement: StatementSync;
@@ -144,6 +163,58 @@ export class SqliteConversationStore {
       CREATE INDEX IF NOT EXISTS exchange_usage_conversation_created
         ON exchange_usage(conversation_id, created_at, id);
 
+      CREATE TABLE IF NOT EXISTS conversation_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id TEXT NOT NULL
+          REFERENCES conversations(id) ON DELETE CASCADE,
+        summarized_through_message_id INTEGER NOT NULL
+          REFERENCES messages(id) ON DELETE CASCADE,
+        summarized_message_count INTEGER NOT NULL
+          CHECK (
+            summarized_message_count > 0
+            AND summarized_message_count % 10 = 0
+          ),
+        content TEXT NOT NULL CHECK (length(content) > 0),
+        model TEXT NOT NULL,
+        provider_prompt_tokens INTEGER CHECK (provider_prompt_tokens >= 0),
+        provider_completion_tokens INTEGER CHECK (provider_completion_tokens >= 0),
+        cost_micros_usd INTEGER NOT NULL CHECK (cost_micros_usd >= 0),
+        created_at TEXT NOT NULL,
+        UNIQUE (conversation_id, summarized_through_message_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS conversation_summaries_latest
+        ON conversation_summaries(
+          conversation_id,
+          summarized_message_count DESC,
+          id DESC
+        );
+
+      CREATE TABLE IF NOT EXISTS exchange_compression (
+        assistant_message_id INTEGER PRIMARY KEY
+          REFERENCES messages(id) ON DELETE CASCADE,
+        conversation_id TEXT NOT NULL
+          REFERENCES conversations(id) ON DELETE CASCADE,
+        summary_id INTEGER
+          REFERENCES conversation_summaries(id) ON DELETE SET NULL,
+        raw_tail_message_count INTEGER NOT NULL
+          CHECK (raw_tail_message_count BETWEEN 0 AND 19),
+        full_prompt_tokens INTEGER NOT NULL CHECK (full_prompt_tokens >= 0),
+        compressed_prompt_tokens INTEGER NOT NULL
+          CHECK (compressed_prompt_tokens >= 0),
+        summary_tokens INTEGER NOT NULL CHECK (summary_tokens >= 0),
+        raw_tail_tokens INTEGER NOT NULL CHECK (raw_tail_tokens >= 0),
+        gross_saved_tokens INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS exchange_compression_conversation_created
+        ON exchange_compression(
+          conversation_id,
+          created_at,
+          assistant_message_id
+        );
+
       CREATE TABLE IF NOT EXISTS overflow_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         model TEXT NOT NULL,
@@ -178,6 +249,12 @@ export class SqliteConversationStore {
       SELECT id, conversation_id, role, content, created_at
       FROM messages
       WHERE conversation_id = ?
+      ORDER BY id ASC
+    `);
+    this.getMessagesAfterStatement = this.database.prepare(`
+      SELECT id, conversation_id, role, content, created_at
+      FROM messages
+      WHERE conversation_id = ? AND id > ?
       ORDER BY id ASC
     `);
     this.insertMessageStatement = this.database.prepare(`
@@ -230,6 +307,76 @@ export class SqliteConversationStore {
       FROM exchange_usage
       WHERE conversation_id = ?
       ORDER BY created_at ASC, id ASC
+    `);
+    this.insertSummaryStatement = this.database.prepare(`
+      INSERT INTO conversation_summaries (
+        conversation_id,
+        summarized_through_message_id,
+        summarized_message_count,
+        content,
+        model,
+        provider_prompt_tokens,
+        provider_completion_tokens,
+        cost_micros_usd,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    this.getLatestSummaryStatement = this.database.prepare(`
+      SELECT *
+      FROM conversation_summaries
+      WHERE conversation_id = ?
+      ORDER BY summarized_message_count DESC, id DESC
+      LIMIT 1
+    `);
+    this.getSummariesStatement = this.database.prepare(`
+      SELECT *
+      FROM conversation_summaries
+      WHERE conversation_id = ?
+      ORDER BY summarized_message_count ASC, id ASC
+    `);
+    this.getMessageConversationStatement = this.database.prepare(`
+      SELECT conversation_id
+      FROM messages
+      WHERE id = ?
+    `);
+    this.countMessagesThroughStatement = this.database.prepare(`
+      SELECT COUNT(*) AS message_count
+      FROM messages
+      WHERE conversation_id = ? AND id <= ?
+    `);
+    this.getSummaryConversationStatement = this.database.prepare(`
+      SELECT conversation_id
+      FROM conversation_summaries
+      WHERE id = ?
+    `);
+    this.insertCompressionStatement = this.database.prepare(`
+      INSERT INTO exchange_compression (
+        assistant_message_id,
+        conversation_id,
+        summary_id,
+        raw_tail_message_count,
+        full_prompt_tokens,
+        compressed_prompt_tokens,
+        summary_tokens,
+        raw_tail_tokens,
+        gross_saved_tokens,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    this.getCompressionStatement = this.database.prepare(`
+      SELECT
+        ec.*,
+        eu.provider_prompt_tokens,
+        eu.provider_completion_tokens,
+        eu.request_tokens,
+        eu.response_tokens,
+        eu.source,
+        eu.cost_micros_usd
+      FROM exchange_compression AS ec
+      LEFT JOIN exchange_usage AS eu
+        ON eu.assistant_message_id = ec.assistant_message_id
+      WHERE ec.conversation_id = ?
+      ORDER BY ec.created_at ASC, ec.assistant_message_id ASC
     `);
     this.insertOverflowRunStatement = this.database.prepare(`
       INSERT INTO overflow_runs (
@@ -323,14 +470,150 @@ export class SqliteConversationStore {
     }));
   }
 
+  getMessagesAfter(
+    conversationId: string,
+    summarizedThroughMessageId: number | null,
+  ): StoredMessage[] {
+    return (
+      this.getMessagesAfterStatement.all(
+        conversationId,
+        summarizedThroughMessageId ?? 0,
+      ) as MessageRow[]
+    ).map((row) => ({
+      id: row.id,
+      conversationId: row.conversation_id,
+      role: row.role,
+      content: row.content,
+      createdAt: row.created_at,
+    }));
+  }
+
+  getLatestConversationSummary(conversationId: string): SummaryCheckpoint | null {
+    const row = this.getLatestSummaryStatement.get(conversationId) as
+      | SummaryRow
+      | undefined;
+    return row ? mapSummary(row) : null;
+  }
+
+  getConversationSummaries(conversationId: string): SummaryCheckpoint[] {
+    return (this.getSummariesStatement.all(conversationId) as SummaryRow[]).map(
+      mapSummary,
+    );
+  }
+
+  saveConversationSummary(
+    conversationId: string,
+    input: SummaryCheckpointInput,
+  ): SummaryCheckpoint {
+    if (!this.getConversation(conversationId)) {
+      throw new ConversationNotFoundError(conversationId);
+    }
+    const content = input.content.trim();
+    if (
+      !content ||
+      !input.model.trim() ||
+      input.providerPromptTokens === null ||
+      input.providerCompletionTokens === null
+    ) {
+      throw new TypeError("Summary и его provider usage обязательны.");
+    }
+
+    const timestamp = new Date().toISOString();
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const cursor = this.getMessageConversationStatement.get(
+        input.summarizedThroughMessageId,
+      ) as { conversation_id: string } | undefined;
+      if (cursor?.conversation_id !== conversationId) {
+        throw new RangeError("Summary cursor не принадлежит диалогу.");
+      }
+      const latest = this.getLatestSummaryStatement.get(conversationId) as
+        | SummaryRow
+        | undefined;
+      const expectedCount =
+        (latest?.summarized_message_count ?? 0) + 10;
+      const countRow = this.countMessagesThroughStatement.get(
+        conversationId,
+        input.summarizedThroughMessageId,
+      ) as { message_count: number };
+      if (
+        input.summarizedMessageCount !== expectedCount ||
+        countRow.message_count !== input.summarizedMessageCount
+      ) {
+        throw new RangeError("Summary checkpoint пропускает сообщения.");
+      }
+      const result = this.insertSummaryStatement.run(
+        conversationId,
+        input.summarizedThroughMessageId,
+        input.summarizedMessageCount,
+        content,
+        input.model,
+        input.providerPromptTokens,
+        input.providerCompletionTokens,
+        input.costMicrosUsd,
+        timestamp,
+      );
+      this.database.exec("COMMIT");
+      return {
+        ...input,
+        id: Number(result.lastInsertRowid),
+        conversationId,
+        content,
+        createdAt: timestamp,
+      };
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  getConversationCompression(
+    conversationId: string,
+  ): StoredExchangeCompression[] {
+    return (
+      this.getCompressionStatement.all(conversationId) as ExchangeCompressionRow[]
+    ).map((row) => {
+      if (
+        row.source === null ||
+        row.cost_micros_usd === null ||
+        row.request_tokens === null ||
+        row.response_tokens === null
+      ) {
+        throw new Error("Compression row не связан с exchange usage.");
+      }
+      return {
+        assistantMessageId: row.assistant_message_id,
+        conversationId: row.conversation_id,
+        requestTokens: row.request_tokens,
+        responseTokens: row.response_tokens,
+        summaryId: row.summary_id,
+        rawTailMessageCount: row.raw_tail_message_count,
+        fullPromptTokens: row.full_prompt_tokens,
+        compressedPromptTokens: row.compressed_prompt_tokens,
+        summaryTokens: row.summary_tokens,
+        rawTailTokens: row.raw_tail_tokens,
+        grossSavedTokens: row.gross_saved_tokens,
+        providerPromptTokens: row.provider_prompt_tokens,
+        providerCompletionTokens: row.provider_completion_tokens,
+        source: row.source,
+        costMicrosUsd: row.cost_micros_usd,
+        createdAt: row.created_at,
+      };
+    });
+  }
+
   saveExchange(
     conversationId: string,
     userContent: string,
     assistantContent: string,
     usage?: ExchangeUsageInput,
+    compression?: ExchangeCompressionInput,
   ): ConversationSummary {
     const conversation = this.getConversation(conversationId);
     if (!conversation) throw new ConversationNotFoundError(conversationId);
+    if (compression && !usage) {
+      throw new TypeError("Compression metrics требуют exchange usage.");
+    }
 
     const timestamp = new Date().toISOString();
     const title =
@@ -341,6 +624,14 @@ export class SqliteConversationStore {
 
     this.database.exec("BEGIN IMMEDIATE");
     try {
+      if (compression?.summaryId !== null && compression?.summaryId !== undefined) {
+        const summary = this.getSummaryConversationStatement.get(
+          compression.summaryId,
+        ) as { conversation_id: string } | undefined;
+        if (summary?.conversation_id !== conversationId) {
+          throw new RangeError("Compression summary не принадлежит диалогу.");
+        }
+      }
       this.insertMessageStatement.run(conversationId, "user", userContent, timestamp);
       const assistantResult = this.insertMessageStatement.run(
         conversationId,
@@ -348,10 +639,11 @@ export class SqliteConversationStore {
         assistantContent,
         timestamp,
       );
+      const assistantMessageId = Number(assistantResult.lastInsertRowid);
       if (usage) {
         this.insertUsageStatement.run(
           conversationId,
-          Number(assistantResult.lastInsertRowid),
+          assistantMessageId,
           usage.model,
           usage.contextLimit,
           usage.systemTokens,
@@ -367,6 +659,20 @@ export class SqliteConversationStore {
           usage.source,
           usage.tariffBand,
           usage.costMicrosUsd,
+          timestamp,
+        );
+      }
+      if (compression) {
+        this.insertCompressionStatement.run(
+          assistantMessageId,
+          conversationId,
+          compression.summaryId,
+          compression.rawTailMessageCount,
+          compression.fullPromptTokens,
+          compression.compressedPromptTokens,
+          compression.summaryTokens,
+          compression.rawTailTokens,
+          compression.grossSavedTokens,
           timestamp,
         );
       }
