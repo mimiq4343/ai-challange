@@ -1,3 +1,6 @@
+import type { ChatAgentResponse, ProviderTokenUsage } from "./conversation-types";
+import { getLiveModelProfile } from "./model-profiles";
+
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -22,45 +25,116 @@ export class ChatAgentError extends Error {
   }
 }
 
-const INSTRUCTIONS = `Ты Flash — универсальный AI-агент.
+export const CHAT_SYSTEM_PROMPT = `Ты Flash — универсальный AI-агент.
 Отвечай на языке пользователя, по существу и без лишнего вступления.
 Учитывай предыдущие сообщения диалога и давай законченные ответы.`;
 
-function sseToTextStream(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+type ProviderEvent = {
+  choices?: { delta?: { content?: unknown } }[];
+  usage?: {
+    prompt_tokens?: unknown;
+    completion_tokens?: unknown;
+    total_tokens?: unknown;
+    prompt_cache_hit_tokens?: unknown;
+    prompt_cache_miss_tokens?: unknown;
+  };
+};
+
+function optionalTokenCount(value: unknown): number | null | undefined {
+  if (value === undefined || value === null) return null;
+  if (!Number.isSafeInteger(value) || (value as number) < 0) return undefined;
+  return value as number;
+}
+
+function parseProviderUsage(value: ProviderEvent["usage"]): ProviderTokenUsage | null {
+  if (!value) return null;
+
+  const promptTokens = optionalTokenCount(value.prompt_tokens);
+  const completionTokens = optionalTokenCount(value.completion_tokens);
+  const totalTokens = optionalTokenCount(value.total_tokens);
+  const cacheHitTokens = optionalTokenCount(value.prompt_cache_hit_tokens);
+  const cacheMissTokens = optionalTokenCount(value.prompt_cache_miss_tokens);
+  if (
+    promptTokens === null ||
+    promptTokens === undefined ||
+    completionTokens === null ||
+    completionTokens === undefined ||
+    totalTokens === null ||
+    totalTokens === undefined ||
+    cacheHitTokens === undefined ||
+    cacheMissTokens === undefined ||
+    totalTokens !== promptTokens + completionTokens ||
+    (cacheHitTokens ?? 0) + (cacheMissTokens ?? 0) > promptTokens
+  ) {
+    return null;
+  }
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    cacheHitTokens,
+    cacheMissTokens,
+  };
+}
+
+export function sseToChatResponse(
+  body: ReadableStream<Uint8Array>,
+): ChatAgentResponse {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   let buffer = "";
+  let finalUsage: ProviderTokenUsage | null = null;
+  let resolveUsage: (usage: ProviderTokenUsage | null) => void = () => undefined;
+  const usage = new Promise<ProviderTokenUsage | null>((resolve) => {
+    resolveUsage = resolve;
+  });
 
-  return body.pipeThrough(
+  function processLine(line: string, controller: TransformStreamDefaultController<Uint8Array>) {
+    if (!line.startsWith("data:")) return;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") return;
+
+    let event: ProviderEvent;
+    try {
+      event = JSON.parse(data) as ProviderEvent;
+    } catch {
+      return;
+    }
+
+    const parsedUsage = parseProviderUsage(event.usage);
+    if (parsedUsage) finalUsage = parsedUsage;
+
+    const delta = event.choices?.[0]?.delta?.content;
+    if (typeof delta === "string" && delta.length > 0) {
+      controller.enqueue(encoder.encode(delta));
+    }
+  }
+
+  const stream = body.pipeThrough(
     new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
         buffer += decoder.decode(chunk, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          const data = line.slice(5).trim();
-          if (!data || data === "[DONE]") continue;
-
-          let event: { choices?: { delta?: { content?: unknown } }[] };
-          try {
-            event = JSON.parse(data);
-          } catch {
-            continue;
-          }
-
-          const delta = event.choices?.[0]?.delta?.content;
-          if (typeof delta === "string" && delta.length > 0) {
-            controller.enqueue(encoder.encode(delta));
-          }
-        }
+        for (const line of lines) processLine(line, controller);
+      },
+      flush(controller) {
+        buffer += decoder.decode();
+        if (buffer) processLine(buffer, controller);
+        resolveUsage(finalUsage);
       },
     }),
   );
+
+  return { stream, usage };
 }
 
 export class ChatAgent {
+  get model(): string {
+    return this.config.model;
+  }
+
   private constructor(private readonly config: ChatAgentConfig) {}
 
   static fromEnvironment(env: NodeJS.ProcessEnv = process.env): ChatAgent {
@@ -86,8 +160,18 @@ export class ChatAgent {
   async respond(
     messages: ChatMessage[],
     signal: AbortSignal,
-  ): Promise<ReadableStream<Uint8Array>> {
+  ): Promise<ChatAgentResponse> {
     const url = `${this.config.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+    let profile;
+    try {
+      profile = getLiveModelProfile(this.config.model);
+    } catch (error) {
+      throw new ChatAgentError(
+        error instanceof Error ? error.message : "Неизвестная модель.",
+        "configuration",
+        { cause: error },
+      );
+    }
     let response: Response;
 
     try {
@@ -99,8 +183,10 @@ export class ChatAgent {
         },
         body: JSON.stringify({
           model: this.config.model,
-          messages: [{ role: "system", content: INSTRUCTIONS }, ...messages],
+          messages: [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...messages],
           stream: true,
+          stream_options: { include_usage: true },
+          max_tokens: profile.responseReserveTokens,
         }),
         signal,
       });
@@ -119,6 +205,6 @@ export class ChatAgent {
       );
     }
 
-    return sseToTextStream(response.body);
+    return sseToChatResponse(response.body);
   }
 }

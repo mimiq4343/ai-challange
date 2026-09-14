@@ -4,8 +4,19 @@ import {
   getConversationStore,
   type SqliteConversationStore,
 } from "./conversation-store";
+import type { ChatAgentResponse, TokenBreakdown } from "./conversation-types";
+import { calculateDeepSeekCost } from "./token-cost";
+import { assertContextFits, countChatPrompt, countTextTokens } from "./token-counter";
 
-type LlmResponder = Pick<ChatAgent, "respond">;
+type LlmResponder = {
+  readonly model: string;
+  respond(messages: ChatMessage[], signal: AbortSignal): Promise<ChatAgentResponse>;
+};
+
+export type PersistentChatResponse = {
+  stream: ReadableStream<Uint8Array>;
+  preflight: TokenBreakdown;
+};
 
 export class PersistentChatAgent {
   private readonly store: SqliteConversationStore;
@@ -26,26 +37,29 @@ export class PersistentChatAgent {
     conversationId: string,
     content: string,
     signal: AbortSignal,
-  ): Promise<ReadableStream<Uint8Array>> {
+  ): Promise<PersistentChatResponse> {
     if (!this.store.getConversation(conversationId)) {
       throw new ConversationNotFoundError(conversationId);
     }
 
-    const messages: ChatMessage[] = this.store
+    const history: ChatMessage[] = this.store
       .getMessages(conversationId)
       .map(({ role, content: savedContent }) => ({ role, content: savedContent }));
-    messages.push({ role: "user", content });
+    const preflight = await countChatPrompt({ history, request: content });
+    assertContextFits(preflight);
 
-    const source = await this.llm.respond(messages, signal);
+    const response = await this.llm.respond(
+      [...history, { role: "user", content }],
+      signal,
+    );
     const chunks: Uint8Array[] = [];
-
-    return source.pipeThrough(
+    const stream = response.stream.pipeThrough(
       new TransformStream<Uint8Array, Uint8Array>({
         transform(chunk, controller) {
           chunks.push(chunk.slice());
           controller.enqueue(chunk);
         },
-        flush: () => {
+        flush: async () => {
           const totalBytes = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
           const completeResponse = new Uint8Array(totalBytes);
           let offset = 0;
@@ -58,9 +72,30 @@ export class PersistentChatAgent {
           if (assistantContent.length === 0) {
             throw new ChatAgentError("API вернул пустой ответ.", "upstream");
           }
-          this.store.saveExchange(conversationId, content, assistantContent);
+
+          const providerUsage = await response.usage;
+          const responseTokens =
+            providerUsage?.completionTokens ?? (await countTextTokens(assistantContent));
+          const { tariffBand, costMicrosUsd } = calculateDeepSeekCost({
+            promptTokens: providerUsage?.promptTokens ?? preflight.promptTokens,
+            completionTokens: responseTokens,
+            cacheHitTokens: providerUsage?.cacheHitTokens ?? null,
+            cacheMissTokens: providerUsage?.cacheMissTokens ?? null,
+            at: new Date(),
+          });
+          this.store.saveExchange(conversationId, content, assistantContent, {
+            ...preflight,
+            model: this.llm.model,
+            responseTokens,
+            providerUsage,
+            source: providerUsage ? "provider" : "estimated",
+            tariffBand,
+            costMicrosUsd,
+          });
         },
       }),
     );
+
+    return { stream, preflight };
   }
 }

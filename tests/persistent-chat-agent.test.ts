@@ -25,15 +25,25 @@ test("loads saved context before the LLM call and persists the completed exchang
 
   const calls: ChatMessage[][] = [];
   const llm = {
+    model: "deepseek-v4-flash",
     async respond(messages: ChatMessage[]) {
       calls.push(messages);
-      return new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(encoder.encode("КЕ"));
-          controller.enqueue(encoder.encode("ДР"));
-          controller.close();
-        },
-      });
+      return {
+        stream: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode("КЕ"));
+            controller.enqueue(encoder.encode("ДР"));
+            controller.close();
+          },
+        }),
+        usage: Promise.resolve({
+          promptTokens: 100,
+          completionTokens: 2,
+          totalTokens: 102,
+          cacheHitTokens: 50,
+          cacheMissTokens: 50,
+        }),
+      };
     },
   };
   const agent = new PersistentChatAgent(store, llm);
@@ -43,7 +53,7 @@ test("loads saved context before the LLM call and persists the completed exchang
     "Какое кодовое слово?",
     AbortSignal.timeout(1_000),
   );
-  assert.equal(await new Response(response).text(), "КЕДР");
+  assert.equal(await new Response(response.stream).text(), "КЕДР");
   assert.deepEqual(calls, [
     [
       { role: "user", content: "Меня зовут Роман" },
@@ -69,19 +79,23 @@ test("does not persist an exchange when the LLM stream fails", async () => {
   const store = new SqliteConversationStore(join(directory, "chat.sqlite"));
   const conversation = store.createConversation();
   const llm = {
+    model: "deepseek-v4-flash",
     async respond() {
-      return new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(encoder.encode("частичный ответ"));
-          controller.error(new Error("stream failed"));
-        },
-      });
+      return {
+        stream: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode("частичный ответ"));
+            controller.error(new Error("stream failed"));
+          },
+        }),
+        usage: Promise.resolve(null),
+      };
     },
   };
   const agent = new PersistentChatAgent(store, llm);
 
   const response = await agent.respond(conversation.id, "Запрос", AbortSignal.timeout(1_000));
-  await assert.rejects(new Response(response).text(), /stream failed/);
+  await assert.rejects(new Response(response.stream).text(), /stream failed/);
   assert.deepEqual(store.getMessages(conversation.id), []);
   store.close();
 });
