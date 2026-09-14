@@ -27,9 +27,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const agent = ChatAgent.fromEnvironment();
-    const stream = await agent.respond(messages, request.signal);
+    const response = await agent.respond(messages, request.signal);
 
-    return new Response(stream, {
+    return new Response(response.stream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store",

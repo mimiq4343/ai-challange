@@ -10,15 +10,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:persistence": "tsx --test tests/conversation-store.test.ts tests/persistent-chat-agent.test.ts"
+    "test:persistence": "node --conditions=react-server --import tsx --test tests/conversation-store.test.ts tests/persistent-chat-agent.test.ts",
+    "test:tokens": "node --conditions=react-server --import tsx --test tests/token-counter.test.ts tests/token-cost.test.ts tests/chat-agent-usage.test.ts tests/conversation-usage.test.ts tests/overflow-experiment.test.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@phosphor-icons/react": "^2.1.10",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

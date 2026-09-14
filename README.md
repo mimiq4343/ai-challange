@@ -3,9 +3,9 @@
 Автор: **Roman Sukhin** (@mimiq43).
 
 Одно Next.js-приложение для заданий **AI Advent Challenge #9**. Каждый день
-разрабатывается в отдельной ветке и вливается в `main` после проверки. Текущая
-стабильная версия — **Day 7**: многодиалоговый AI-агент с постоянной памятью в
-SQLite.
+разрабатывается в отдельной ветке и вливается в `main` после проверки. В `main`
+стабильна версия Day 7; ветка `day-8` добавляет измерение токенов, стоимости и
+переполнения контекстного окна.
 
 Стек: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4 и встроенный
 `node:sqlite`. Требуется Node.js **22.13 или новее**. LLM подключается через
@@ -23,6 +23,7 @@ SQLite.
 | `day-5` | Day 5 «Слабая, средняя и сильная модель»         |
 | `day-6` | Day 6 «Первый агент»                             |
 | `day-7` | Day 7 «Сохранение контекста между запусками»     |
+| `day-8` | Day 8 «Токены и переполнение контекста»            |
 
 ## Хронология
 
@@ -79,7 +80,21 @@ Browser → conversation API → PersistentChatAgent → SQLite history
 диалога из SQLite. Только после штатного завершения stream он одной транзакцией
 сохраняет пару `user + assistant`; оборванный ответ не оставляет половину обмена.
 
-## SQLite и API Day 7
+### Day 8 · Токены и переполнение контекста — страница `/day-8`
+
+Перед каждым запросом сервер считает системный промпт, историю, новое сообщение
+и резерв ответа локальным официальным токенизатором DeepSeek. После завершения
+stream фактические `prompt_tokens`, `completion_tokens`, cache split и стоимость
+сохраняются в SQLite вместе с обменом. Локальная разбивка помечается как
+`estimate`; итоговые значения провайдера остаются источником истины.
+
+Интерфейс показывает рост текущего контекста, накопительные токены и стоимость,
+а также сравнивает короткий и длинный сценарии. Отдельный подтверждаемый тест
+делает ровно один запрос к OpenRouter Embeddings с input больше лимита 32 768
+токенов модели `nvidia/nemotron-3-embed-1b:free`. Retry нет; большой input и
+embedding vector не сохраняются и не логируются.
+
+## SQLite и API Day 7–8
 
 История создаётся автоматически в `data/chat.sqlite`. SQLite работает в
 WAL-режиме, foreign keys включены. Таблицы `conversations` и `messages` связаны
@@ -92,6 +107,16 @@ GET    /api/conversations/:id
 DELETE /api/conversations/:id
 POST   /api/conversations/:id/messages
 ```
+
+```text
+GET  /api/conversations/:id/usage
+GET  /api/token-experiments/comparison
+POST /api/token-experiments/overflow
+```
+
+Day 8 добавляет STRICT-таблицы `exchange_usage` и `overflow_runs`. Сообщения и
+usage одного завершённого обмена сохраняются одной транзакцией. Старые обмены
+Day 7 рассчитываются при чтении как `estimated` без обратной записи в базу.
 
 Браузер отправляет только ID диалога и новое сообщение. Прежний контекст
 загружает сервер, поэтому клиент не может подменить сохранённую историю.
@@ -123,6 +148,14 @@ OPENAI_MODEL=deepseek-v4-flash
 с OpenAI-совместимым методом `POST /chat/completions`: DeepSeek, OpenAI,
 OpenRouter или локальный Ollama. API-ключи остаются на сервере.
 
+Для реального overflow-теста Day 8 добавьте отдельно:
+
+```dotenv
+OPENROUTER_API_KEY=sk-or-...
+```
+
+Этот ключ используется только серверным endpoint `/api/token-experiments/overflow`.
+
 - Day 1: http://localhost:3000/
 - Day 2: http://localhost:3000/day-2
 - Day 3: http://localhost:3000/day-3
@@ -130,46 +163,66 @@ OpenRouter или локальный Ollama. API-ключи остаются н�
 - Day 5: http://localhost:3000/day-5
 - Day 6: http://localhost:3000/day-6
 - Day 7: http://localhost:3000/day-7
+- Day 8: http://localhost:3000/day-8
 
 Если приложение открывается по сетевому адресу машины, этот origin должен быть
 разрешён в `allowedDevOrigins` файла `next.config.ts`.
 
-## Проверка Day 7
+## Проверка Day 8
 
 ```bash
+npm run test:tokens
 npm run test:persistence
 npm run lint
 npx tsc --noEmit
 npm run build
 ```
 
-Тесты создают временную SQLite, закрывают и повторно открывают соединение,
-проверяют восстановление, каскадное удаление и запрет сохранения оборванного
-ответа.
+`test:tokens` проверяет локальный токенизатор, лимит контекста, тарифы, provider
+usage, аналитику legacy-обменов и классификацию overflow-ответов. Тесты работают
+только с локальными tokenizer assets; загрузка моделей из сети отключена.
 
 Практический сценарий:
 
-1. Сообщить агенту кодовое слово и дождаться полного ответа.
-2. Полностью остановить и снова запустить `npm run dev`.
-3. Открыть `/day-7` и спросить кодовое слово без повторной подсказки.
-4. Убедиться, что агент отвечает из восстановленной истории.
+1. На `/day-8` отправить короткий запрос и проверить badge `provider`.
+2. Создать длинный диалог и убедиться, что `history` вырос при следующем обмене.
+3. Полностью остановить и снова запустить `npm run dev`; usage должен
+   восстановиться из SQLite.
+4. Добавить `OPENROUTER_API_KEY`, подтвердить один overflow-запрос и сверить
+   outcome в UI с последней записью `overflow_runs`.
+5. Проверить, что `/day-6` и `/day-7` продолжают открываться.
 
-## Структура Day 7
+## Структура Day 7 и Day 8
 
 ```text
 src/
   app/
-    api/conversations/                  REST API диалогов
-    day-7/page.tsx                      серверная начальная загрузка
+    api/conversations/                  REST API диалогов и usage
+    api/token-experiments/              comparison и реальный overflow
+    day-7/page.tsx                      серверная загрузка постоянного чата
+    day-8/page.tsx                      чат с token analytics
   components/
     conversation-sidebar.tsx            список, создание и удаление
-    conversation-workspace.tsx          чат и переключение диалогов
+    conversation-workspace.tsx          чат, stream и token badges
+    day8-workspace.tsx                  синхронизация чата и аналитики
+    token-analytics-panel.tsx           рост контекста и стоимость
+    token-comparison.tsx                short/long/overflow сравнение
   lib/
-    chat-agent.ts                       вызов LLM
-    conversation-store.ts               SQLite и транзакции
+    chat-agent.ts                       вызов LLM и provider usage
+    conversation-store.ts               SQLite и атомарные транзакции
     conversation-types.ts               общие контракты
-    persistent-chat-agent.ts            восстановление контекста
+    model-profiles.ts                    лимиты моделей и tokenizer paths
+    overflow-experiment.ts              один OpenRouter Embeddings запрос
+    persistent-chat-agent.ts            preflight и сохранение обмена
+    token-analytics.ts                   timeline и legacy estimates
+    token-cost.ts                        тарифы в целых micro-USD
+    token-counter.ts                     локальные official tokenizers
 tests/
+  chat-agent-usage.test.ts
   conversation-store.test.ts
+  conversation-usage.test.ts
+  overflow-experiment.test.ts
   persistent-chat-agent.test.ts
+  token-cost.test.ts
+  token-counter.test.ts
 ```

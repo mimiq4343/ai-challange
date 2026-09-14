@@ -5,23 +5,24 @@ const NAV_LINKS = [
   { href: "/day-5", label: "Day 5" },
   { href: "/day-6", label: "Day 6" },
   { href: "/day-7", label: "Day 7" },
+  { href: "/day-8", label: "Day 8" },
 ];
 
 export function SiteHeader() {
   return (
     <header className="flex h-16 items-center justify-between">
-      <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+      <Link href="/" className="flex min-h-11 items-center gap-2 font-semibold tracking-tight">
         <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-accent-deep text-sm font-bold text-white">
           F
         </span>
         Flash Chat
       </Link>
-      <nav className="flex items-center gap-6 text-sm text-muted">
+      <nav className="flex items-center gap-2 text-sm text-muted sm:gap-4 lg:gap-6">
         {NAV_LINKS.map((link) => (
           <Link
             key={link.href}
             href={link.href}
-            className="transition-colors hover:text-foreground"
+            className={`${link.href === "/#features" ? "hidden md:inline-flex" : "inline-flex"} min-h-11 min-w-11 items-center justify-center transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
           >
             {link.label}
           </Link>

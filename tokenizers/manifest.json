@@ -1,0 +1,29 @@
+{
+  "deepseek-v4": {
+    "source": "https://cdn.deepseek.com/api-docs/deepseek_v4_tokenizer.zip",
+    "files": {
+      "tokenizer.json": {
+        "bytes": 6367096,
+        "sha256": "89085f12ef79460ac5f66d1119325ddfc694b4ab209d80bbd81d35f081dc9614"
+      },
+      "tokenizer_config.json": {
+        "bytes": 3128,
+        "sha256": "841f8cf146e3f0ad1082594a31f68ecf7608c20467ef355081333d85bbaeb1cb"
+      }
+    }
+  },
+  "nemotron-3-embed-1b": {
+    "source": "https://huggingface.co/nvidia/Nemotron-3-Embed-1B-BF16",
+    "revision": "c0c9fea93ea424587517f2c59e20db9f1d6bf615",
+    "files": {
+      "tokenizer.json": {
+        "bytes": 17077678,
+        "sha256": "797410dfb649a5b9ba92bc4fef7dbf4022d00e73de6867c4ac199a8846439421"
+      },
+      "tokenizer_config.json": {
+        "bytes": 21139,
+        "sha256": "7bbb77c55282bc679b86d21a1b3953ed8d5d63aaf75f10800c20596eab30b980"
+      }
+    }
+  }
+}
