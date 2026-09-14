@@ -125,7 +125,7 @@ function repeatedOverflowText(repetitions: number): string {
 }
 
 export async function buildOverflowInput(
-  targetTokens = NEMOTRON_OVERFLOW_PROFILE.targetInputTokens,
+  targetTokens: number = NEMOTRON_OVERFLOW_PROFILE.targetInputTokens,
 ): Promise<{ text: string; tokens: number }> {
   if (!Number.isSafeInteger(targetTokens) || targetTokens <= 0) {
     throw new TypeError("targetTokens должен быть положительным целым числом.");

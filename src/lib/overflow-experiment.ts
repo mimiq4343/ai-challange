@@ -16,6 +16,10 @@ type OversizedInputBuilder = (
   targetTokens?: number,
 ) => Promise<{ text: string; tokens: number }>;
 
+type OverflowEnvironment = {
+  OPENROUTER_API_KEY?: string;
+};
+
 export class OverflowExperimentError extends Error {
   constructor(
     message: string,
@@ -88,7 +92,9 @@ export class OverflowExperimentService {
   constructor(
     private readonly store: OverflowStore = getConversationStore(),
     private readonly fetchImpl: OverflowFetch = fetch,
-    private readonly env: NodeJS.ProcessEnv = process.env,
+    private readonly env: OverflowEnvironment = {
+      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    },
     private readonly buildInput: OversizedInputBuilder = buildOverflowInput,
   ) {}
 

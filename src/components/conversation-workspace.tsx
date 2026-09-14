@@ -14,12 +14,28 @@ import type {
   ConversationDetail,
   ConversationSummary,
   MessageRole,
+  TokenBreakdown,
 } from "@/lib/conversation-types";
+
+export type MessageTokenBadge = {
+  requestTokens: number;
+  responseTokens: number;
+  source: "provider" | "estimated";
+};
+
+export type ConversationWorkspaceEvents = {
+  onConversationChange?: (conversationId: string | null) => void;
+  onUsagePreview?: (conversationId: string, breakdown: TokenBreakdown) => void;
+  onExchangeComplete?: (conversationId: string) => void;
+  onExchangeFailed?: (conversationId: string) => void;
+};
 
 type ConversationWorkspaceProps = {
   initialConversations: ConversationSummary[];
   initialDetail: ConversationDetail | null;
   model: string | null;
+  events?: ConversationWorkspaceEvents;
+  messageTokenBadges?: readonly MessageTokenBadge[];
 };
 
 type UiMessage = {
@@ -47,10 +63,34 @@ async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Pro
   return payload as T;
 }
 
+const TOKEN_HEADER_NAMES = {
+  systemTokens: "X-Token-System",
+  historyTokens: "X-Token-History",
+  requestTokens: "X-Token-Request",
+  promptTokens: "X-Token-Prompt",
+  reservedOutputTokens: "X-Token-Reserved-Output",
+  contextTokens: "X-Token-Context",
+  contextLimit: "X-Token-Limit",
+} as const;
+
+function readTokenBreakdown(headers: Headers): TokenBreakdown | null {
+  const entries = Object.entries(TOKEN_HEADER_NAMES).map(([field, header]) => {
+    const value = headers.get(header);
+    const tokens = value === null ? Number.NaN : Number(value);
+    return [field, tokens] as const;
+  });
+  if (entries.some(([, tokens]) => !Number.isSafeInteger(tokens) || tokens < 0)) {
+    return null;
+  }
+  return Object.fromEntries(entries) as TokenBreakdown;
+}
+
 export function ConversationWorkspace({
   initialConversations,
   initialDetail,
   model,
+  events,
+  messageTokenBadges,
 }: ConversationWorkspaceProps) {
   const [conversations, setConversations] = useState(initialConversations);
   const [activeId, setActiveId] = useState(initialDetail?.conversation.id ?? null);
@@ -99,6 +139,7 @@ export function ConversationWorkspace({
     setActiveId(result.conversation.id);
     setMessages([]);
     setSidebarOpen(false);
+    events?.onConversationChange?.(result.conversation.id);
     return result.conversation;
   }
 
@@ -130,6 +171,7 @@ export function ConversationWorkspace({
           content: message.content,
         })),
       );
+      events?.onConversationChange?.(id);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "Не удалось загрузить диалог.");
       await refreshConversations().catch(() => undefined);
@@ -161,6 +203,7 @@ export function ConversationWorkspace({
     if (!next) {
       setActiveId(null);
       setMessages([]);
+      events?.onConversationChange?.(null);
       return;
     }
 
@@ -175,9 +218,11 @@ export function ConversationWorkspace({
           content: message.content,
         })),
       );
+      events?.onConversationChange?.(next.id);
     } catch (actionError) {
       setActiveId(null);
       setMessages([]);
+      events?.onConversationChange?.(null);
       setError(
         actionError instanceof Error ? actionError.message : "Не удалось загрузить следующий диалог.",
       );
@@ -247,6 +292,9 @@ export function ConversationWorkspace({
         );
       }
 
+      const preview = readTokenBreakdown(response.headers);
+      if (preview) events?.onUsagePreview?.(conversationId, preview);
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       for (;;) {
@@ -272,12 +320,16 @@ export function ConversationWorkspace({
         );
       }
       await refreshConversations();
+      events?.onExchangeComplete?.(conversationId);
     } catch (actionError) {
       if (!(actionError instanceof DOMException && actionError.name === "AbortError")) {
         setInput(content);
         setError(actionError instanceof Error ? actionError.message : "Не удалось получить ответ.");
       }
-      if (conversationId) await restoreConversation(conversationId);
+      if (conversationId) {
+        await restoreConversation(conversationId);
+        events?.onExchangeFailed?.(conversationId);
+      }
     } finally {
       setStreaming(false);
       abortRef.current = null;
@@ -367,24 +419,41 @@ export function ConversationWorkspace({
                 </div>
               </div>
             ) : (
-              messages.map((message) =>
-                message.role === "user" ? (
-                  <div key={message.id} className="flex justify-end">
-                    <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-accent/20 bg-accent/10 px-4 py-2.5 text-sm leading-relaxed">
-                      {message.content}
-                    </p>
-                  </div>
-                ) : (
-                  <div key={message.id} className="flex">
+              messages.map((message, index) => {
+                const badge = messageTokenBadges?.[Math.floor(index / 2)];
+                if (message.role === "user") {
+                  return (
+                    <div key={message.id} className="flex flex-col items-end gap-1">
+                      <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-accent/20 bg-accent/10 px-4 py-2.5 text-sm leading-relaxed">
+                        {message.content}
+                      </p>
+                      {badge && (
+                        <span className="font-mono text-[10px] text-muted">
+                          ≈ {badge.requestTokens.toLocaleString("ru-RU")} ток. · estimate
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={message.id} className="flex flex-col items-start gap-1">
                     <div className="chat-md max-w-[92%] text-sm leading-relaxed">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                       {streaming && message.id === messages.at(-1)?.id && (
                         <span className="ml-0.5 inline-block h-4 w-2 translate-y-0.5 rounded-[2px] bg-accent motion-safe:animate-pulse" />
                       )}
                     </div>
+                    {badge && badge.responseTokens > 0 && (
+                      <span className="font-mono text-[10px] text-muted">
+                        {badge.source === "provider" ? "" : "≈ "}
+                        {badge.responseTokens.toLocaleString("ru-RU")} ток. ·{" "}
+                        {badge.source}
+                      </span>
+                    )}
                   </div>
-                ),
-              )
+                );
+              })
             )}
           </div>
         </div>
