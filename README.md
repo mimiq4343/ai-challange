@@ -94,6 +94,12 @@ stream фактические `prompt_tokens`, `completion_tokens`, cache split 
 токенов модели `nvidia/nemotron-3-embed-1b:free`. Retry нет; большой input и
 embedding vector не сохраняются и не логируются.
 
+Фактический прогон: локальный токенизатор насчитал 33 288 токенов в input из
+221 919 символов. OpenRouter вернул HTTP 400 по собственному ограничению 65 536
+символов, то есть отклонил payload раньше проверки token context window.
+Сохранённый outcome — `rejected`, provider token count отсутствует, длительность
+849 ms, стоимость $0.
+
 ## SQLite и API Day 7–8
 
 История создаётся автоматически в `data/chat.sqlite`. SQLite работает в

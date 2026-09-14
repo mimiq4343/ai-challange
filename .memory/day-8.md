@@ -8,6 +8,7 @@
 - Стоимость хранится целым числом micro-USD. Неизвестный cache split считается cache miss.
 - Реальный overflow использует один запрос без retry к OpenRouter Embeddings, модель `nvidia/nemotron-3-embed-1b:free`, лимит 32 768 и детерминированный input больше лимита. Большой input и embedding vector не сохраняются и не логируются.
 - Для overflow нужен только server-side `OPENROUTER_API_KEY` в `.env.local`; значение не должно попадать в логи или git.
+- Единственный реальный overflow-прогон: local input 33 288 токенов и 221 919 символов; OpenRouter вернул HTTP 400 из-за лимита 65 536 символов до проверки token context. Сохранено `outcome = rejected`, `providerInputTokens = null`, duration 849 ms, cost 0.
 - Проверенные реальные диалоги: short — provider prompt 92, completion 186; long follow-up — local history 4 882, суммарно provider prompt 9 942, completion 128, cost 1 744 micro-USD.
 - Полный рестарт Next.js сохранил оба provider usage обмена длинного диалога и `historyTokens = 4 882`.
 - Постоянные проверки: `npm run test:tokens` и `npm run test:persistence`.
