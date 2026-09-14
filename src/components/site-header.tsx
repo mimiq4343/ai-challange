@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { href: "/day-7", label: "Day 7" },
   { href: "/day-8", label: "Day 8" },
   { href: "/day-9", label: "Day 9" },
+  { href: "/day-10", label: "Day 10" },
 ];
 
 export function SiteHeader() {
@@ -18,7 +19,7 @@ export function SiteHeader() {
         </span>
         Flash Chat
       </Link>
-      <nav className="flex items-center gap-2 text-sm text-muted sm:gap-4 lg:gap-6">
+      <nav className="flex max-w-[68vw] items-center gap-2 overflow-x-auto text-sm text-muted sm:gap-4 lg:gap-6">
         {NAV_LINKS.map((link) => (
           <Link
             key={link.href}
