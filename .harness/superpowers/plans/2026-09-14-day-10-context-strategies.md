@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4, built-in `node:sqlite`.
 
-**Spec:** `docs/superpowers/specs/2026-09-14-day-10-context-strategies-design.md`
+**Spec:** `.harness/superpowers/specs/2026-09-14-day-10-context-strategies-design.md`
 
 ## Global Constraints
 
@@ -200,8 +200,8 @@ Expected: exit 0.
 
 **Files:**
 - Modify: `README.md`
-- Modify: `.memory/project.md`
-- Create: `.memory/day-10.md`
+- Modify: `.harness/memory/project.md`
+- Create: `.harness/memory/day-10.md`
 - Modify: `package.json`
 
 **Interfaces:**
@@ -234,6 +234,6 @@ Expected: build succeeds and diff check is empty.
 - [ ] **Step 5: Commit implementation**
 
 ```bash
-git add .memory README.md package.json src tests docs/superpowers/plans/2026-09-14-day-10-context-strategies.md
+git add .harness/memory README.md package.json src tests .harness/superpowers/plans/2026-09-14-day-10-context-strategies.md
 git commit -m "feat(day-10): add context management strategies"
 ```

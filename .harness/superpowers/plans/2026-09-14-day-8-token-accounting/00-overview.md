@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16.3.4, React 19.2.8, TypeScript 5, Node.js 24 `node:sqlite`, Tailwind CSS 4, `@huggingface/transformers` 4.2.0, Phosphor Icons, `node:test` через `tsx`.
 
-**Spec:** `docs/superpowers/specs/2026-09-14-day-8-token-accounting-design.md`
+**Spec:** `.harness/superpowers/specs/2026-09-14-day-8-token-accounting-design.md`
 
 ## Глобальные ограничения
 

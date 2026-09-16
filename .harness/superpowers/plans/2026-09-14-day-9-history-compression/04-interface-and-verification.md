@@ -151,8 +151,8 @@ git commit -m "feat(day-9): visualize context savings"
 
 **Files:**
 - Modify: `README.md`
-- Create: `.memory/day-9.md`
-- Modify: `.memory/project.md`
+- Create: `.harness/memory/day-9.md`
+- Modify: `.harness/memory/project.md`
 - Runtime only: gitignored `data/chat.sqlite`, browser screenshots and temporary HTTP payload files outside repository
 
 **Interfaces:**
@@ -230,7 +230,7 @@ Document in `README.md`:
 - live compression metrics and fixed four-call blind benchmark;
 - `npm run test:compression`.
 
-Create `.memory/day-9.md` with durable architecture, table/API contracts, real observed run IDs/totals and verification notes. Update `.memory/project.md` only where its latest-day summary/navigation is now stale. Never include secrets, full user conversation text or benchmark raw prompts.
+Create `.harness/memory/day-9.md` with durable architecture, table/API contracts, real observed run IDs/totals and verification notes. Update `.harness/memory/project.md` only where its latest-day summary/navigation is now stale. Never include secrets, full user conversation text or benchmark raw prompts.
 
 Run:
 
@@ -241,7 +241,7 @@ npm run lint -- README.md
 If ESLint does not accept Markdown inputs, skip that command and inspect only the edited Markdown diff; do not add a Markdown tool.
 
 ```bash
-git add README.md .memory/day-9.md .memory/project.md
+git add README.md .harness/memory/day-9.md .harness/memory/project.md
 git commit -m "docs(day-9): document history compression"
 ```
 

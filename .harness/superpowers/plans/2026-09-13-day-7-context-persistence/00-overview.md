@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16, React 19, TypeScript 5, Node.js 24 `node:sqlite`, Tailwind CSS 4, Phosphor Icons, `node:test` через `tsx`.
 
-**Spec:** `docs/superpowers/specs/2026-09-13-day-7-context-persistence-design.md`
+**Spec:** `.harness/superpowers/specs/2026-09-13-day-7-context-persistence-design.md`
 
 ## Глобальные ограничения
 

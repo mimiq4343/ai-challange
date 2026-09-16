@@ -246,8 +246,8 @@ Check loading, error, empty, estimate, provider and all four overflow outcomes a
 
 **Files:**
 - Modify: `README.md`
-- Create: `.memory/day-8.md`
-- Modify: `.memory/project.md`
+- Create: `.harness/memory/day-8.md`
+- Modify: `.harness/memory/project.md`
 
 - [ ] **Step 1: Update README**
 
@@ -267,7 +267,7 @@ Do not claim a specific overflow outcome until the real run has produced it.
 
 - [ ] **Step 2: Record durable project memory**
 
-`.memory/day-8.md` records architecture, schema, model IDs, context limits, pricing timestamp, observed overflow outcome and verification facts. Update `.memory/project.md` route/feature index. Never record credentials or generated oversized input.
+`.harness/memory/day-8.md` records architecture, schema, model IDs, context limits, pricing timestamp, observed overflow outcome and verification facts. Update `.harness/memory/project.md` route/feature index. Never record credentials or generated oversized input.
 
 - [ ] **Step 3: Run the complete targeted suite**
 
@@ -290,7 +290,7 @@ Confirm only Day 8 implementation, tokenizer assets, docs and intended lockfile 
 - [ ] **Step 5: Commit documentation**
 
 ```bash
-git add README.md .memory/day-8.md .memory/project.md
+git add README.md .harness/memory/day-8.md .harness/memory/project.md
 git commit -m "docs(day-8): document token behavior"
 ```
 
