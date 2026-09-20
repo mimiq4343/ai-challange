@@ -172,6 +172,16 @@ POST /api/compression-experiments
 GET  /api/compression-experiments/latest
 ```
 
+```text
+POST /api/context-strategies/sessions
+GET  /api/context-strategies/sessions/:id
+POST /api/context-strategies/sessions/:id/messages
+POST /api/context-strategies/sessions/:id/checkpoint
+POST /api/context-strategies/sessions/:id/branches/:branchId/activate
+POST /api/context-strategies/benchmark
+GET  /api/context-strategies/benchmark/latest
+```
+
 Day 8 добавляет STRICT-таблицы `exchange_usage` и `overflow_runs`. Сообщения и
 usage одного завершённого обмена сохраняются одной транзакцией. Старые обмены
 Day 7 рассчитываются при чтении как `estimated` без обратной записи в базу.
@@ -248,6 +258,32 @@ OPENROUTER_API_KEY=sk-or-...
 Если приложение открывается по сетевому адресу машины, этот origin должен быть
 разрешён в `allowedDevOrigins` файла `next.config.ts`.
 
+## Проверка Day 8–10
+
+```bash
+npm run test:tokens
+npm run test:compression
+npm run test:context-strategies
+npm run test:persistence
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+`test:tokens` проверяет локальный токенизатор, лимит контекста, тарифы, provider
+usage, аналитику legacy-обменов и классификацию overflow-ответов. Тесты работают
+только с локальными tokenizer assets; загрузка моделей из сети отключена.
+
+Практический сценарий:
+
+1. На `/day-8` отправить короткий запрос и проверить badge `provider`.
+2. Создать длинный диалог и убедиться, что `history` вырос при следующем обмене.
+3. Полностью остановить и снова запустить `npm run dev`; usage должен
+   восстановиться из SQLite.
+4. Добавить `OPENROUTER_API_KEY`, подтвердить один overflow-запрос и сверить
+   outcome в UI с последней записью `overflow_runs`.
+5. Проверить, что `/day-6` и `/day-7` продолжают открываться.
+
 ## Проверка Day 11
 
 ```bash
@@ -274,32 +310,6 @@ npm run build
    телеметрии `LTM 0`.
 4. Проверить, что `/day-7`, `/day-8`, `/day-9` и `/day-10` продолжают работать
    без изменений.
-
-## Проверка Day 8–10
-
-```bash
-npm run test:tokens
-npm run test:compression
-npm run test:context-strategies
-npm run test:persistence
-npm run lint
-npx tsc --noEmit
-npm run build
-```
-
-`test:tokens` проверяет локальный токенизатор, лимит контекста, тарифы, provider
-usage, аналитику legacy-обменов и классификацию overflow-ответов. Тесты работают
-только с локальными tokenizer assets; загрузка моделей из сети отключена.
-
-Практический сценарий:
-
-1. На `/day-8` отправить короткий запрос и проверить badge `provider`.
-2. Создать длинный диалог и убедиться, что `history` вырос при следующем обмене.
-3. Полностью остановить и снова запустить `npm run dev`; usage должен
-   восстановиться из SQLite.
-4. Добавить `OPENROUTER_API_KEY`, подтвердить один overflow-запрос и сверить
-   outcome в UI с последней записью `overflow_runs`.
-5. Проверить, что `/day-6` и `/day-7` продолжают открываться.
 
 ## Структура Day 7–10
 
