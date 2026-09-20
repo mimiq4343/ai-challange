@@ -1,4 +1,6 @@
-export type MemoryLayer = "short_term" | "working" | "long_term";
+import type { ProfileRouterWrite } from "./profile-types";
+
+export type MemoryLayer = "short_term" | "working" | "long_term" | "profile";
 
 export type LongTermKind = "profile" | "decision" | "knowledge";
 
@@ -8,6 +10,7 @@ export type MemoryOrigin = "router" | "user";
 
 export type LongTermEntry = {
   id: number;
+  profileId: number;
   kind: LongTermKind;
   key: string;
   value: string;
@@ -19,6 +22,7 @@ export type LongTermEntry = {
 };
 
 export type LongTermInput = {
+  profileId: number;
   kind: LongTermKind;
   key: string;
   value: string;
@@ -71,7 +75,7 @@ export type MemoryWrite = {
   conversationId: string;
   assistantMessageId: number | null;
   layer: Exclude<MemoryLayer, "short_term">;
-  kind: LongTermKind | WorkingSlotKind;
+  kind: LongTermKind | WorkingSlotKind | string;
   key: string | null;
   value: string;
   reason: string | null;
@@ -83,16 +87,19 @@ export type MemoryLayerToggles = {
   shortTerm: boolean;
   working: boolean;
   longTerm: boolean;
+  profile: boolean;
 };
 
 export const ALL_MEMORY_LAYERS_ENABLED: MemoryLayerToggles = {
   shortTerm: true,
   working: true,
   longTerm: true,
+  profile: true,
 };
 
 export type MemoryLayerTokens = {
   systemTokens: number;
+  profileTokens: number;
   longTermTokens: number;
   workingTokens: number;
   shortTermTokens: number;
@@ -138,6 +145,7 @@ export type ConversationMemorySnapshot = {
 };
 
 export type MemoryRouterWrite =
+  | ProfileRouterWrite
   | {
       layer: "long_term";
       kind: LongTermKind;

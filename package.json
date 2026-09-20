@@ -14,7 +14,8 @@
     "test:tokens": "node --conditions=react-server --import tsx --test tests/token-counter.test.ts tests/token-cost.test.ts tests/chat-agent-usage.test.ts tests/conversation-usage.test.ts tests/overflow-experiment.test.ts",
     "test:compression": "node --conditions=react-server --import tsx --test tests/history-compression.test.ts tests/conversation-compression.test.ts tests/chat-agent-options.test.ts tests/compressed-chat-agent.test.ts tests/compression-benchmark.test.ts",
     "test:context-strategies": "node --conditions=react-server --import tsx --test tests/context-strategy-store.test.ts tests/context-strategy-agent.test.ts tests/context-strategy-benchmark.test.ts",
-    "test:memory": "node --conditions=react-server --import tsx --test tests/memory-store.test.ts tests/memory-composer.test.ts tests/memory-router.test.ts tests/memory-chat-agent.test.ts"
+    "test:memory": "node --conditions=react-server --import tsx --test tests/memory-store.test.ts tests/memory-composer.test.ts tests/memory-router.test.ts tests/memory-chat-agent.test.ts",
+    "test:profiles": "node --conditions=react-server --import tsx --test tests/profile-store.test.ts tests/personalized-agent.test.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",

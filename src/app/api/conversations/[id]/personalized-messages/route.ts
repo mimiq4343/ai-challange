@@ -1,27 +1,26 @@
 import { ChatAgentError } from "@/lib/chat-agent";
 import { ConversationNotFoundError } from "@/lib/conversation-store";
-import { MemoryChatAgent } from "@/lib/memory-chat-agent";
 import { ALL_MEMORY_LAYERS_ENABLED, type MemoryLayerToggles } from "@/lib/memory-types";
+import { PersonalizedChatAgent } from "@/lib/personalized-chat-agent";
 import { ContextLimitError } from "@/lib/token-counter";
 
 export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** Day 11 не знает о персонализации: слой профиля здесь всегда выключен. */
 function parseLayers(value: unknown): MemoryLayerToggles | null {
-  if (value === undefined) return { ...ALL_MEMORY_LAYERS_ENABLED, profile: false };
+  if (value === undefined) return ALL_MEMORY_LAYERS_ENABLED;
   if (typeof value !== "object" || value === null) return null;
 
   const candidate = value as Record<string, unknown>;
-  const toggles = ["shortTerm", "working", "longTerm"] as const;
+  const toggles = ["shortTerm", "working", "longTerm", "profile"] as const;
   if (toggles.some((name) => typeof candidate[name] !== "boolean")) return null;
 
   return {
     shortTerm: candidate.shortTerm as boolean,
     working: candidate.working as boolean,
     longTerm: candidate.longTerm as boolean,
-    profile: false,
+    profile: candidate.profile as boolean,
   };
 }
 
@@ -43,13 +42,16 @@ export async function POST(request: Request, context: RouteContext) {
   const layers = parseLayers(body.layers);
   if (!layers) {
     return Response.json(
-      { error: "Поле layers должно содержать булевы shortTerm, working и longTerm." },
+      {
+        error:
+          "Поле layers должно содержать булевы shortTerm, working, longTerm и profile.",
+      },
       { status: 400 },
     );
   }
 
   try {
-    const response = await MemoryChatAgent.fromEnvironment().respond(
+    const response = await PersonalizedChatAgent.fromEnvironment().respond(
       id,
       content.trim(),
       layers,
@@ -72,7 +74,9 @@ export async function POST(request: Request, context: RouteContext) {
         "X-Memory-Ltm": String(layerTokens.longTermTokens),
         "X-Memory-Wm": String(layerTokens.workingTokens),
         "X-Memory-Stm": String(layerTokens.shortTermTokens),
+        "X-Memory-Prof": String(layerTokens.profileTokens),
         "X-Memory-Stm-Messages": String(response.shortTermMessages),
+        "X-Memory-Profile": String(response.profile.id),
       },
     });
   } catch (error) {
@@ -103,7 +107,7 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    console.error(`Не удалось получить ответ памяти для диалога ${id}.`, error);
+    console.error(`Не удалось получить персонализированный ответ для ${id}.`, error);
     return Response.json({ error: "Не удалось получить ответ агента." }, { status: 500 });
   }
 }

@@ -394,7 +394,12 @@ export function MemoryInspector({
             snapshot?.writes.map((write) => (
               <li key={write.id} className="rounded-lg border border-line px-2 py-1.5">
                 <p className="font-mono text-[10px] text-muted">
-                  {write.layer === "long_term" ? "LTM" : "WM"} · {write.kind}
+                  {write.layer === "long_term"
+                    ? "LTM"
+                    : write.layer === "profile"
+                      ? "PROF"
+                      : "WM"}{" "}
+                  · {write.kind}
                   {write.key ? ` · ${write.key}` : ""} ·{" "}
                   {write.origin === "user" ? "вручную" : "роутер"}
                 </p>

@@ -78,6 +78,7 @@ test("router prompt exposes existing keys and the active task", () => {
       ],
     },
     longTermKeys: ["language", "favourite_color"],
+    profile: null,
   });
 
   assert.match(prompt, /language, favourite_color/);
@@ -102,6 +103,7 @@ test("router result carries provider cost when usage is reported", async () => {
     response: "Привет",
     working: null,
     longTermKeys: [],
+    profile: null,
   });
 
   assert.equal(result.cost?.promptTokens, 1_000);
@@ -118,6 +120,7 @@ test("router result without provider usage reports no cost", async () => {
     response: "Привет",
     working: null,
     longTermKeys: [],
+    profile: null,
   });
 
   assert.equal(result.cost, null);

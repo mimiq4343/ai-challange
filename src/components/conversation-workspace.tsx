@@ -26,7 +26,8 @@ export type MessageTokenBadge = {
 export type ConversationMessageRoute =
   | "messages"
   | "compressed-messages"
-  | "memory-messages";
+  | "memory-messages"
+  | "personalized-messages";
 
 export type ConversationWorkspaceEvents = {
   onConversationChange?: (conversationId: string | null) => void;

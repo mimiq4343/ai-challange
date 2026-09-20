@@ -22,6 +22,7 @@ function storedMessages(count: number): StoredMessage[] {
 function longTermEntry(id: number, key: string, value: string): LongTermEntry {
   return {
     id,
+    profileId: 1,
     kind: "profile",
     key,
     value,
@@ -58,10 +59,11 @@ const working: WorkingMemory = {
 
 test("short term memory keeps only the last window of messages", async () => {
   const composed = await composeMemoryPrompt({
+    profile: null,
     messages: storedMessages(20),
     longTerm: [],
     working: null,
-    layers: { shortTerm: true, working: true, longTerm: true },
+    layers: { shortTerm: true, working: true, longTerm: true, profile: false },
   });
 
   assert.equal(composed.history.length, SHORT_TERM_WINDOW_MESSAGES);
@@ -75,16 +77,18 @@ test("disabled layers drop their blocks and cost zero tokens", async () => {
   const longTerm = [longTermEntry(1, "favourite_color", "синий")];
 
   const enabled = await composeMemoryPrompt({
+    profile: null,
     messages,
     longTerm,
     working,
-    layers: { shortTerm: true, working: true, longTerm: true },
+    layers: { shortTerm: true, working: true, longTerm: true, profile: false },
   });
   const disabled = await composeMemoryPrompt({
+    profile: null,
     messages,
     longTerm,
     working,
-    layers: { shortTerm: false, working: false, longTerm: false },
+    layers: { shortTerm: false, working: false, longTerm: false, profile: false },
   });
 
   assert.equal(enabled.systemMessages.length, 3);
@@ -130,10 +134,11 @@ test("long term budget keeps the freshest entries and reports the rest as skippe
   );
 
   const composed = await composeMemoryPrompt({
+    profile: null,
     messages: [],
     longTerm: bulky,
     working: null,
-    layers: { shortTerm: true, working: true, longTerm: true },
+    layers: { shortTerm: true, working: true, longTerm: true, profile: false },
   });
 
   assert.ok(composed.includedLongTerm.length > 0);

@@ -10,11 +10,17 @@ import type { ChatRequestOptions } from "../src/lib/conversation-types";
 import { MemoryChatAgent } from "../src/lib/memory-chat-agent";
 import type { MemoryRouterLlm } from "../src/lib/memory-router-llm";
 import { SqliteMemoryStore } from "../src/lib/memory-store";
+import { SqliteProfileStore } from "../src/lib/profile-store";
 import type { MemoryLayerToggles } from "../src/lib/memory-types";
 
 const temporaryDirectories: string[] = [];
 const encoder = new TextEncoder();
-const ALL_LAYERS: MemoryLayerToggles = { shortTerm: true, working: true, longTerm: true };
+const ALL_LAYERS: MemoryLayerToggles = {
+  shortTerm: true,
+  working: true,
+  longTerm: true,
+  profile: false,
+};
 
 after(async () => {
   await Promise.all(
@@ -73,13 +79,15 @@ async function createEnvironment() {
   const databasePath = join(directory, "chat.sqlite");
   const store = new SqliteConversationStore(databasePath);
   const memory = new SqliteMemoryStore(databasePath);
-  return { store, memory };
+  const profiles = new SqliteProfileStore(databasePath);
+  return { store, memory, profiles, profileId: profiles.getActiveProfile().id };
 }
 
 test("router writes land in their layers and the prompt carries every enabled block", async () => {
-  const { store, memory } = await createEnvironment();
+  const { store, memory, profiles, profileId } = await createEnvironment();
   const conversation = store.createConversation();
   memory.upsertLongTerm({
+    profileId,
     kind: "profile",
     key: "favourite_color",
     value: "синий",
@@ -112,6 +120,7 @@ test("router writes land in their layers and the prompt carries every enabled bl
   const agent = new MemoryChatAgent(
     store,
     memory,
+    profiles,
     stubLlm("Готово", calls),
     router,
   );
@@ -129,7 +138,7 @@ test("router writes land in their layers and the prompt carries every enabled bl
   assert.match(systemMessages[2], /Задача: Модель памяти/);
 
   assert.deepEqual(
-    memory.listLongTerm().map((entry) => entry.key).sort(),
+    memory.listLongTerm(profileId).map((entry) => entry.key).sort(),
     ["favourite_color", "language"],
   );
   assert.deepEqual(
@@ -144,14 +153,16 @@ test("router writes land in their layers and the prompt carries every enabled bl
   assert.deepEqual(usage?.layers, ALL_LAYERS);
 
   memory.close();
+  profiles.close();
   store.close();
 });
 
 test("disabled layers stay out of the prompt", async () => {
-  const { store, memory } = await createEnvironment();
+  const { store, memory, profiles, profileId } = await createEnvironment();
   const conversation = store.createConversation();
   store.saveExchange(conversation.id, "Первый вопрос", "Первый ответ");
   memory.upsertLongTerm({
+    profileId,
     kind: "profile",
     key: "favourite_color",
     value: "синий",
@@ -161,13 +172,13 @@ test("disabled layers stay out of the prompt", async () => {
   });
 
   const calls: RecordedCall[] = [];
-  const agent = new MemoryChatAgent(store, memory, stubLlm("Ответ", calls), null);
+  const agent = new MemoryChatAgent(store, memory, profiles, stubLlm("Ответ", calls), null);
   await drain(
     (
       await agent.respond(
         conversation.id,
         "Какой у меня цвет?",
-        { shortTerm: false, working: false, longTerm: false },
+        { shortTerm: false, working: false, longTerm: false, profile: false },
         new AbortController().signal,
       )
     ).stream,
@@ -178,14 +189,15 @@ test("disabled layers stay out of the prompt", async () => {
   const usage = memory.getLatestUsage(conversation.id);
   assert.equal(usage?.longTermTokens, 0);
   assert.equal(usage?.shortTermTokens, 0);
-  assert.deepEqual(usage?.layers, { shortTerm: false, working: false, longTerm: false });
+  assert.deepEqual(usage?.layers, { shortTerm: false, working: false, longTerm: false, profile: false });
 
   memory.close();
+  profiles.close();
   store.close();
 });
 
 test("a failing router keeps the exchange and leaves memory unchanged", async () => {
-  const { store, memory } = await createEnvironment();
+  const { store, memory, profiles, profileId } = await createEnvironment();
   const conversation = store.createConversation();
 
   const failingRouter: MemoryRouterLlm = {
@@ -197,6 +209,7 @@ test("a failing router keeps the exchange and leaves memory unchanged", async ()
   const agent = new MemoryChatAgent(
     store,
     memory,
+    profiles,
     stubLlm("Ответ агента", []),
     failingRouter,
   );
@@ -216,12 +229,13 @@ test("a failing router keeps the exchange and leaves memory unchanged", async ()
       { role: "assistant", content: "Ответ агента" },
     ],
   );
-  assert.equal(memory.listLongTerm().length, 0);
+  assert.equal(memory.listLongTerm(profileId).length, 0);
   assert.equal(memory.getWorkingMemory(conversation.id), null);
   assert.equal(memory.listWrites(conversation.id).length, 0);
   assert.ok(memory.getLatestUsage(conversation.id) !== null);
   assert.equal(memory.getLatestUsage(conversation.id)?.router, null);
 
   memory.close();
+  profiles.close();
   store.close();
 });

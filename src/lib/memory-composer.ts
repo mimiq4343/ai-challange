@@ -12,6 +12,14 @@ import type {
   WorkingSlot,
   WorkingSlotKind,
 } from "./memory-types";
+import {
+  PROFILE_EXPERTISES,
+  PROFILE_FORMATS,
+  PROFILE_LANGUAGES,
+  PROFILE_TONES,
+  PROFILE_VERBOSITIES,
+  type UserProfile,
+} from "./profile-types";
 import { countTemplatedMessages, countTextTokens } from "./token-counter";
 
 /** Окно краткосрочной памяти: сколько последних сообщений уходит дословно. */
@@ -35,8 +43,32 @@ const WORKING_LABELS: Record<WorkingSlotKind, string> = {
 const LONG_TERM_HEADER =
   "Долговременная память агента. Используй эти сведения как известные факты и не переспрашивай их:";
 const WORKING_HEADER = "Рабочая память — состояние текущей задачи:";
+
+/** Собирает блок персонализации из профиля пользователя. */
+export function renderProfileBlock(profile: UserProfile): string {
+  const title = profile.role
+    ? `Профиль пользователя: ${profile.name} (${profile.role})`
+    : `Профиль пользователя: ${profile.name}`;
+  const style = [
+    `Отвечай ${PROFILE_VERBOSITIES[profile.verbosity]}`,
+    `тон — ${PROFILE_TONES[profile.tone]}`,
+    `формат — ${PROFILE_FORMATS[profile.format]}`,
+    `язык — ${PROFILE_LANGUAGES[profile.language]}`,
+    `уровень собеседника — ${PROFILE_EXPERTISES[profile.expertise]}`,
+  ].join(", ");
+  const lines = [title, `${style}.`];
+  if (profile.constraints.length > 0) {
+    lines.push(
+      `Ограничения: ${profile.constraints.map((constraint) => constraint.value).join("; ")}.`,
+    );
+  }
+
+  return lines.join("\n");
+}
+
 export type ComposedMemoryPrompt = {
   systemMessages: string[];
+  profileBlock: string | null;
   longTermBlock: string | null;
   workingBlock: string | null;
   history: ChatMessage[];
@@ -72,10 +104,14 @@ async function selectWithinBudget<T>(
 
 export async function composeMemoryPrompt(input: {
   messages: readonly StoredMessage[];
+  profile: UserProfile | null;
   longTerm: readonly LongTermEntry[];
   working: WorkingMemory | null;
   layers: MemoryLayerToggles;
 }): Promise<ComposedMemoryPrompt> {
+  const profileBlock =
+    input.layers.profile && input.profile ? renderProfileBlock(input.profile) : null;
+
   const longTermSelection = input.layers.longTerm
     ? await selectWithinBudget(
         input.longTerm,
@@ -119,9 +155,13 @@ export async function composeMemoryPrompt(input: {
     : [];
 
   return {
-    systemMessages: [CHAT_SYSTEM_PROMPT, longTermBlock, workingBlock].filter(
-      (block): block is string => block !== null,
-    ),
+    systemMessages: [
+      CHAT_SYSTEM_PROMPT,
+      profileBlock,
+      longTermBlock,
+      workingBlock,
+    ].filter((block): block is string => block !== null),
+    profileBlock,
     longTermBlock,
     workingBlock,
     history: window.map(({ role, content }) => ({ role, content })),
@@ -147,36 +187,46 @@ export async function countMemoryPromptTokens(input: {
   const contextLimit = input.contextLimit ?? DEEPSEEK_FLASH_PROFILE.contextWindow;
   const reservedOutputTokens =
     input.reservedOutputTokens ?? DEEPSEEK_FLASH_PROFILE.responseReserveTokens;
-  const { longTermBlock, workingBlock } = input.composed;
+  const { profileBlock, longTermBlock, workingBlock } = input.composed;
   const base = input.composed.systemMessages[0];
-  const withLongTerm = longTermBlock ? [base, longTermBlock] : [base];
+  const withProfile = profileBlock ? [base, profileBlock] : [base];
+  const withLongTerm = longTermBlock ? [...withProfile, longTermBlock] : withProfile;
   const withWorking = workingBlock ? [...withLongTerm, workingBlock] : withLongTerm;
 
   const toSystem = (contents: readonly string[]) =>
     contents.map((content) => ({ role: "system" as const, content }));
 
-  const [systemTokens, longTermPrefix, workingPrefix, historyPrefix, promptTokens] =
-    await Promise.all([
-      countTemplatedMessages(toSystem([base]), false),
-      countTemplatedMessages(toSystem(withLongTerm), false),
-      countTemplatedMessages(toSystem(withWorking), false),
-      countTemplatedMessages([...toSystem(withWorking), ...input.composed.history], false),
-      countTemplatedMessages(
-        [
-          ...toSystem(withWorking),
-          ...input.composed.history,
-          { role: "user" as const, content: input.request },
-        ],
-        true,
-      ),
-    ]);
+  const [
+    systemTokens,
+    profilePrefix,
+    longTermPrefix,
+    workingPrefix,
+    historyPrefix,
+    promptTokens,
+  ] = await Promise.all([
+    countTemplatedMessages(toSystem([base]), false),
+    countTemplatedMessages(toSystem(withProfile), false),
+    countTemplatedMessages(toSystem(withLongTerm), false),
+    countTemplatedMessages(toSystem(withWorking), false),
+    countTemplatedMessages([...toSystem(withWorking), ...input.composed.history], false),
+    countTemplatedMessages(
+      [
+        ...toSystem(withWorking),
+        ...input.composed.history,
+        { role: "user" as const, content: input.request },
+      ],
+      true,
+    ),
+  ]);
 
-  const longTermTokens = longTermPrefix - systemTokens;
+  const profileTokens = profilePrefix - systemTokens;
+  const longTermTokens = longTermPrefix - profilePrefix;
   const workingTokens = workingPrefix - longTermPrefix;
   const shortTermTokens = historyPrefix - workingPrefix;
   const requestTokens = promptTokens - historyPrefix;
 
   if (
+    profileTokens < 0 ||
     longTermTokens < 0 ||
     workingTokens < 0 ||
     shortTermTokens < 0 ||
@@ -187,6 +237,7 @@ export async function countMemoryPromptTokens(input: {
 
   return {
     systemTokens,
+    profileTokens,
     longTermTokens,
     workingTokens,
     shortTermTokens,

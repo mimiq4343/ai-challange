@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 
+import { ensureMemorySchema } from "./memory-schema";
 import { openChatDatabase, releaseChatDatabase } from "./sqlite-database";
 import type {
   ConversationMemorySnapshot,
@@ -25,6 +26,7 @@ const WRITE_LOG_LIMIT = 40;
 
 type LongTermRow = {
   id: number;
+  profile_id: number;
   kind: LongTermKind;
   key: string;
   value: string;
@@ -73,6 +75,7 @@ type UsageRow = {
   conversation_id: string;
   assistant_message_id: number;
   system_tokens: number;
+  profile_tokens: number;
   long_term_tokens: number;
   working_tokens: number;
   short_term_tokens: number;
@@ -91,6 +94,7 @@ type UsageRow = {
 function toLongTermEntry(row: LongTermRow): LongTermEntry {
   return {
     id: row.id,
+    profileId: row.profile_id,
     kind: row.kind,
     key: row.key,
     value: row.value,
@@ -135,104 +139,28 @@ export class SqliteMemoryStore {
   constructor(databasePath: string) {
     this.databasePath = databasePath;
     this.database = openChatDatabase(databasePath);
-    this.database.exec(`
-      CREATE TABLE IF NOT EXISTS memory_long_term (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        kind TEXT NOT NULL CHECK (kind IN ('profile', 'decision', 'knowledge')),
-        key TEXT NOT NULL,
-        value TEXT NOT NULL,
-        origin TEXT NOT NULL CHECK (origin IN ('router', 'user')),
-        reason TEXT,
-        source_conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE (kind, key)
-      ) STRICT;
-
-      CREATE TABLE IF NOT EXISTS memory_working_tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conversation_id TEXT NOT NULL
-          REFERENCES conversations(id) ON DELETE CASCADE,
-        title TEXT NOT NULL,
-        goal TEXT,
-        status TEXT NOT NULL CHECK (status IN ('active', 'closed')),
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      ) STRICT;
-
-      CREATE UNIQUE INDEX IF NOT EXISTS memory_working_tasks_active
-        ON memory_working_tasks(conversation_id) WHERE status = 'active';
-
-      CREATE TABLE IF NOT EXISTS memory_working_slots (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        task_id INTEGER NOT NULL
-          REFERENCES memory_working_tasks(id) ON DELETE CASCADE,
-        kind TEXT NOT NULL
-          CHECK (kind IN ('fact', 'constraint', 'step', 'open_question')),
-        value TEXT NOT NULL,
-        origin TEXT NOT NULL CHECK (origin IN ('router', 'user')),
-        reason TEXT,
-        created_at TEXT NOT NULL,
-        UNIQUE (task_id, kind, value)
-      ) STRICT;
-
-      CREATE TABLE IF NOT EXISTS memory_writes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE,
-        assistant_message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
-        layer TEXT NOT NULL CHECK (layer IN ('working', 'long_term')),
-        kind TEXT NOT NULL,
-        key TEXT,
-        value TEXT NOT NULL,
-        reason TEXT,
-        origin TEXT NOT NULL CHECK (origin IN ('router', 'user')),
-        created_at TEXT NOT NULL
-      ) STRICT;
-
-      CREATE INDEX IF NOT EXISTS memory_writes_conversation
-        ON memory_writes(conversation_id, id);
-
-      CREATE TABLE IF NOT EXISTS memory_exchange_usage (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conversation_id TEXT NOT NULL
-          REFERENCES conversations(id) ON DELETE CASCADE,
-        assistant_message_id INTEGER NOT NULL UNIQUE
-          REFERENCES messages(id) ON DELETE CASCADE,
-        system_tokens INTEGER NOT NULL CHECK (system_tokens >= 0),
-        long_term_tokens INTEGER NOT NULL CHECK (long_term_tokens >= 0),
-        working_tokens INTEGER NOT NULL CHECK (working_tokens >= 0),
-        short_term_tokens INTEGER NOT NULL CHECK (short_term_tokens >= 0),
-        request_tokens INTEGER NOT NULL CHECK (request_tokens >= 0),
-        prompt_tokens INTEGER NOT NULL CHECK (prompt_tokens >= 0),
-        reserved_output_tokens INTEGER NOT NULL CHECK (reserved_output_tokens >= 0),
-        context_limit INTEGER NOT NULL CHECK (context_limit > 0),
-        short_term_messages INTEGER NOT NULL CHECK (short_term_messages >= 0),
-        layers_enabled TEXT NOT NULL,
-        router_prompt_tokens INTEGER CHECK (router_prompt_tokens >= 0),
-        router_completion_tokens INTEGER CHECK (router_completion_tokens >= 0),
-        router_cost_micros_usd INTEGER CHECK (router_cost_micros_usd >= 0),
-        created_at TEXT NOT NULL
-      ) STRICT;
-    `);
+    ensureMemorySchema(this.database);
 
     this.listLongTermStatement = this.database.prepare(`
-      SELECT id, kind, key, value, origin, reason, source_conversation_id,
+      SELECT id, profile_id, kind, key, value, origin, reason, source_conversation_id,
              created_at, updated_at
       FROM memory_long_term
+      WHERE profile_id = ?
       ORDER BY updated_at DESC, id DESC
     `);
     this.upsertLongTermStatement = this.database.prepare(`
       INSERT INTO memory_long_term (
-        kind, key, value, origin, reason, source_conversation_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (kind, key) DO UPDATE SET
+        profile_id, kind, key, value, origin, reason, source_conversation_id,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (profile_id, kind, key) DO UPDATE SET
         value = excluded.value,
         origin = excluded.origin,
         reason = excluded.reason,
         source_conversation_id = excluded.source_conversation_id,
         updated_at = excluded.updated_at
-      RETURNING id, kind, key, value, origin, reason, source_conversation_id,
-                created_at, updated_at
+      RETURNING id, profile_id, kind, key, value, origin, reason,
+                source_conversation_id, created_at, updated_at
     `);
     this.deleteLongTermStatement = this.database.prepare(`
       DELETE FROM memory_long_term WHERE id = ?
@@ -294,16 +222,18 @@ export class SqliteMemoryStore {
     `);
     this.insertUsageStatement = this.database.prepare(`
       INSERT INTO memory_exchange_usage (
-        conversation_id, assistant_message_id, system_tokens, long_term_tokens,
+        conversation_id, assistant_message_id, system_tokens, profile_tokens,
+        long_term_tokens,
         working_tokens, short_term_tokens, request_tokens, prompt_tokens,
         reserved_output_tokens, context_limit, short_term_messages, layers_enabled,
         router_prompt_tokens, router_completion_tokens, router_cost_micros_usd,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     this.getLatestUsageStatement = this.database.prepare(`
       SELECT id, conversation_id, assistant_message_id, system_tokens,
-             long_term_tokens, working_tokens, short_term_tokens, request_tokens,
+             profile_tokens, long_term_tokens, working_tokens, short_term_tokens,
+             request_tokens,
              prompt_tokens, reserved_output_tokens, context_limit,
              short_term_messages, layers_enabled, router_prompt_tokens,
              router_completion_tokens, router_cost_micros_usd, created_at
@@ -314,13 +244,16 @@ export class SqliteMemoryStore {
     `);
   }
 
-  listLongTerm(): LongTermEntry[] {
-    return (this.listLongTermStatement.all() as LongTermRow[]).map(toLongTermEntry);
+  listLongTerm(profileId: number): LongTermEntry[] {
+    return (this.listLongTermStatement.all(profileId) as LongTermRow[]).map(
+      toLongTermEntry,
+    );
   }
 
   upsertLongTerm(input: LongTermInput, journal?: JournalContext): LongTermEntry {
     const timestamp = new Date().toISOString();
     const row = this.upsertLongTermStatement.get(
+      input.profileId,
       input.kind,
       input.key,
       input.value,
@@ -473,6 +406,7 @@ export class SqliteMemoryStore {
       usage.layers.shortTerm ? "stm" : null,
       usage.layers.working ? "wm" : null,
       usage.layers.longTerm ? "ltm" : null,
+      usage.layers.profile ? "prof" : null,
     ]
       .filter((layer): layer is string => layer !== null)
       .join(",");
@@ -481,6 +415,7 @@ export class SqliteMemoryStore {
       conversationId,
       assistantMessageId,
       usage.systemTokens,
+      usage.profileTokens,
       usage.longTermTokens,
       usage.workingTokens,
       usage.shortTermTokens,
@@ -507,6 +442,7 @@ export class SqliteMemoryStore {
       conversationId: row.conversation_id,
       assistantMessageId: row.assistant_message_id,
       systemTokens: row.system_tokens,
+      profileTokens: row.profile_tokens,
       longTermTokens: row.long_term_tokens,
       workingTokens: row.working_tokens,
       shortTermTokens: row.short_term_tokens,
@@ -520,6 +456,7 @@ export class SqliteMemoryStore {
         shortTerm: enabled.includes("stm"),
         working: enabled.includes("wm"),
         longTerm: enabled.includes("ltm"),
+        profile: enabled.includes("prof"),
       },
       router:
         row.router_prompt_tokens === null ||
@@ -542,6 +479,7 @@ export class SqliteMemoryStore {
   applyRouterResult(
     conversationId: string,
     assistantMessageId: number,
+    profileId: number,
     result: MemoryRouterResult,
   ): number {
     let applied = 0;
@@ -556,6 +494,7 @@ export class SqliteMemoryStore {
         if (write.layer === "long_term") {
           this.upsertLongTerm(
             {
+              profileId,
               kind: write.kind,
               key: write.key,
               value: write.value,
@@ -569,7 +508,7 @@ export class SqliteMemoryStore {
           continue;
         }
 
-        if (!task) continue;
+        if (write.layer !== "working" || !task) continue;
         const slot = this.addSlot(
           task.id,
           {
@@ -595,11 +534,12 @@ export class SqliteMemoryStore {
 
   getSnapshot(
     conversationId: string,
+    profileId: number,
     shortTerm: ConversationMemorySnapshot["shortTerm"],
   ): ConversationMemorySnapshot {
     return {
       conversationId,
-      longTerm: this.listLongTerm(),
+      longTerm: this.listLongTerm(profileId),
       working: this.getWorkingMemory(conversationId),
       shortTerm,
       writes: this.listWrites(conversationId),

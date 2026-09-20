@@ -14,10 +14,9 @@ import {
   countMemoryPromptTokens,
   SHORT_TERM_WINDOW_MESSAGES,
 } from "./memory-composer";
-import { getMemoryStore, type SqliteMemoryStore } from "./memory-store";
-import { getProfileStore, type SqliteProfileStore } from "./profile-store";
 import { runMemoryRouter } from "./memory-router";
 import { ProviderMemoryRouterLlm, type MemoryRouterLlm } from "./memory-router-llm";
+import { getMemoryStore, type SqliteMemoryStore } from "./memory-store";
 import type {
   ConversationMemorySnapshot,
   MemoryLayerTokens,
@@ -25,6 +24,8 @@ import type {
   MemoryRouterResult,
   WorkingMemory,
 } from "./memory-types";
+import { getProfileStore, type SqliteProfileStore } from "./profile-store";
+import type { ProfileRouterWrite, UserProfile } from "./profile-types";
 import { calculateDeepSeekCost } from "./token-cost";
 import { assertContextFits, countTextTokens } from "./token-counter";
 
@@ -37,13 +38,18 @@ type LlmResponder = {
   ): Promise<ChatAgentResponse>;
 };
 
-export type MemoryChatResponse = {
+export type PersonalizedChatResponse = {
   stream: ReadableStream<Uint8Array>;
   layerTokens: MemoryLayerTokens;
   shortTermMessages: number;
+  profile: UserProfile;
 };
 
-export class MemoryChatAgent {
+export type PersonalizedMemorySnapshot = ConversationMemorySnapshot & {
+  profile: UserProfile;
+};
+
+export class PersonalizedChatAgent {
   constructor(
     private readonly store: SqliteConversationStore,
     private readonly memory: SqliteMemoryStore,
@@ -56,8 +62,8 @@ export class MemoryChatAgent {
     store: SqliteConversationStore = getConversationStore(),
     memory: SqliteMemoryStore = getMemoryStore(),
     profiles: SqliteProfileStore = getProfileStore(),
-  ): MemoryChatAgent {
-    return new MemoryChatAgent(
+  ): PersonalizedChatAgent {
+    return new PersonalizedChatAgent(
       store,
       memory,
       profiles,
@@ -66,13 +72,17 @@ export class MemoryChatAgent {
     );
   }
 
-  getSnapshot(conversationId: string): ConversationMemorySnapshot {
+  getSnapshot(conversationId: string): PersonalizedMemorySnapshot {
+    const profile = this.profiles.getActiveProfile();
     const messages = this.store.getMessages(conversationId);
-    return this.memory.getSnapshot(conversationId, this.profiles.getActiveProfile().id, {
-      windowMessages: SHORT_TERM_WINDOW_MESSAGES,
-      totalMessages: messages.length,
-      includedMessages: Math.min(messages.length, SHORT_TERM_WINDOW_MESSAGES),
-    });
+    return {
+      ...this.memory.getSnapshot(conversationId, profile.id, {
+        windowMessages: SHORT_TERM_WINDOW_MESSAGES,
+        totalMessages: messages.length,
+        includedMessages: Math.min(messages.length, SHORT_TERM_WINDOW_MESSAGES),
+      }),
+      profile,
+    };
   }
 
   async respond(
@@ -80,7 +90,7 @@ export class MemoryChatAgent {
     content: string,
     layers: MemoryLayerToggles,
     signal: AbortSignal,
-  ): Promise<MemoryChatResponse> {
+  ): Promise<PersonalizedChatResponse> {
     if (!this.store.getConversation(conversationId)) {
       throw new ConversationNotFoundError(conversationId);
     }
@@ -89,10 +99,10 @@ export class MemoryChatAgent {
     const working = this.memory.getWorkingMemory(conversationId);
     const composed = await composeMemoryPrompt({
       messages: this.store.getMessages(conversationId),
-      profile: null,
+      profile,
       longTerm: this.memory.listLongTerm(profile.id),
       working,
-      layers: { ...layers, profile: false },
+      layers,
     });
     const layerTokens = await countMemoryPromptTokens({ composed, request: content });
     assertContextFits({
@@ -134,7 +144,7 @@ export class MemoryChatAgent {
 
           await this.persistExchange({
             conversationId,
-            profileId: profile.id,
+            profile,
             request: content,
             assistantContent,
             layers,
@@ -151,12 +161,13 @@ export class MemoryChatAgent {
       stream,
       layerTokens,
       shortTermMessages: composed.shortTermMessages,
+      profile,
     };
   }
 
   private async persistExchange(input: {
     conversationId: string;
-    profileId: number;
+    profile: UserProfile;
     request: string;
     assistantContent: string;
     layers: MemoryLayerToggles;
@@ -181,7 +192,8 @@ export class MemoryChatAgent {
       historyTokens:
         input.layerTokens.shortTermTokens +
         input.layerTokens.longTermTokens +
-        input.layerTokens.workingTokens,
+        input.layerTokens.workingTokens +
+        input.layerTokens.profileTokens,
       requestTokens: input.layerTokens.requestTokens,
       promptTokens: input.layerTokens.promptTokens,
       reservedOutputTokens: input.layerTokens.reservedOutputTokens,
@@ -200,7 +212,7 @@ export class MemoryChatAgent {
 
     const routerResult = await this.route({
       conversationId: input.conversationId,
-      profileId: input.profileId,
+      profile: input.profile,
       request: input.request,
       assistantContent: input.assistantContent,
       working: input.working,
@@ -213,14 +225,21 @@ export class MemoryChatAgent {
       router: routerResult?.cost ?? null,
     });
 
-    if (routerResult) {
-      this.memory.applyRouterResult(
-        input.conversationId,
-        assistantMessageId,
-        input.profileId,
-        routerResult,
-      );
-    }
+    if (!routerResult) return;
+
+    this.memory.applyRouterResult(
+      input.conversationId,
+      assistantMessageId,
+      input.profile.id,
+      routerResult,
+    );
+    const profileWrites = routerResult.writes.filter(
+      (write): write is ProfileRouterWrite => write.layer === "profile",
+    );
+    this.profiles.applyProfileWrites(input.profile.id, profileWrites, {
+      conversationId: input.conversationId,
+      assistantMessageId,
+    });
   }
 
   /**
@@ -229,7 +248,7 @@ export class MemoryChatAgent {
    */
   private async route(input: {
     conversationId: string;
-    profileId: number;
+    profile: UserProfile;
     request: string;
     assistantContent: string;
     working: WorkingMemory | null;
@@ -243,9 +262,9 @@ export class MemoryChatAgent {
         response: input.assistantContent,
         working: input.working,
         longTermKeys: this.memory
-          .listLongTerm(input.profileId)
+          .listLongTerm(input.profile.id)
           .map((entry) => entry.key),
-        profile: null,
+        profile: input.profile,
       });
     } catch (error) {
       console.error(
