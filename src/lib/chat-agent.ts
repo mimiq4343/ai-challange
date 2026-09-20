@@ -50,7 +50,9 @@ function optionalTokenCount(value: unknown): number | null | undefined {
   return value as number;
 }
 
-function parseProviderUsage(value: ProviderEvent["usage"]): ProviderTokenUsage | null {
+export function parseProviderUsage(
+  value: ProviderEvent["usage"],
+): ProviderTokenUsage | null {
   if (!value) return null;
 
   const promptTokens = optionalTokenCount(value.prompt_tokens);

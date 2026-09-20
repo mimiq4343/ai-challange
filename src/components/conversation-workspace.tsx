@@ -23,7 +23,10 @@ export type MessageTokenBadge = {
   source: "provider" | "estimated";
 };
 
-export type ConversationMessageRoute = "messages" | "compressed-messages";
+export type ConversationMessageRoute =
+  | "messages"
+  | "compressed-messages"
+  | "memory-messages";
 
 export type ConversationWorkspaceEvents = {
   onConversationChange?: (conversationId: string | null) => void;
@@ -39,6 +42,8 @@ type ConversationWorkspaceProps = {
   model: string | null;
   events?: ConversationWorkspaceEvents;
   messageRoute?: ConversationMessageRoute;
+  requestBodyExtra?: Record<string, unknown>;
+  inputFooter?: React.ReactNode;
   messageTokenBadges?: readonly MessageTokenBadge[];
 };
 
@@ -95,6 +100,8 @@ export function ConversationWorkspace({
   model,
   events,
   messageRoute = "messages",
+  requestBodyExtra,
+  inputFooter,
   messageTokenBadges,
 }: ConversationWorkspaceProps) {
   const [conversations, setConversations] = useState(initialConversations);
@@ -287,7 +294,7 @@ export function ConversationWorkspace({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ ...requestBodyExtra, content }),
           signal: (abortRef.current = new AbortController()).signal,
         },
       );
@@ -301,6 +308,7 @@ export function ConversationWorkspace({
       }
       events?.onResponseHeaders?.(conversationId, response.headers);
 
+      events?.onResponseHeaders?.(conversationId, response.headers);
       const preview = readTokenBreakdown(response.headers);
       if (preview) events?.onUsagePreview?.(conversationId, preview);
 
@@ -513,6 +521,9 @@ export function ConversationWorkspace({
               </button>
             )}
           </div>
+          {inputFooter && (
+            <div className="mx-auto w-full max-w-[820px] pt-2">{inputFooter}</div>
+          )}
         </form>
       </section>
     </div>

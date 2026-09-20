@@ -18,6 +18,7 @@ them against the current sources before relying on them.
 - [day-8.md](day-8.md) — token accounting, provider usage as source of truth, the single real overflow run.
 - [day-9.md](day-9.md) — immutable summary checkpoints, `CompressedChatAgent`, blind benchmark results.
 - [day-10.md](day-10.md) — Sliding Window, Sticky Facts and Branching strategies with their benchmark numbers.
+- [day-11.md](day-11.md) — three memory layers, the memory router, `memory_*` tables and the layer toggles.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

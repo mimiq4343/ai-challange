@@ -36,12 +36,17 @@ function assertTokenIds(value: unknown): asserts value is number[] {
   }
 }
 
-async function countTemplatedMessages(
-  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+export type TemplatedMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+export async function countTemplatedMessages(
+  messages: readonly TemplatedMessage[],
   addGenerationPrompt: boolean,
 ): Promise<number> {
   const tokenizer = await getTokenizer(DEEPSEEK_FLASH_PROFILE.tokenizer);
-  const tokenIds = tokenizer.apply_chat_template(messages, {
+  const tokenIds = tokenizer.apply_chat_template([...messages], {
     tokenize: true,
     add_generation_prompt: addGenerationPrompt,
     return_tensor: false,
