@@ -1,4 +1,8 @@
-import type { ChatAgentResponse, ProviderTokenUsage } from "./conversation-types";
+import type {
+  ChatAgentResponse,
+  ChatRequestOptions,
+  ProviderTokenUsage,
+} from "./conversation-types";
 import { getLiveModelProfile } from "./model-profiles";
 
 export type ChatMessage = {
@@ -46,7 +50,9 @@ function optionalTokenCount(value: unknown): number | null | undefined {
   return value as number;
 }
 
-function parseProviderUsage(value: ProviderEvent["usage"]): ProviderTokenUsage | null {
+export function parseProviderUsage(
+  value: ProviderEvent["usage"],
+): ProviderTokenUsage | null {
   if (!value) return null;
 
   const promptTokens = optionalTokenCount(value.prompt_tokens);
@@ -158,9 +164,17 @@ export class ChatAgent {
   }
 
   async respond(
-    messages: ChatMessage[],
+    messages: readonly ChatMessage[],
     signal: AbortSignal,
+    options?: ChatRequestOptions,
   ): Promise<ChatAgentResponse> {
+    const systemMessages = options?.systemMessages ?? [CHAT_SYSTEM_PROMPT];
+    if (systemMessages.some((content) => content.trim().length === 0)) {
+      throw new ChatAgentError(
+        "Список system messages должен содержать непустые строки.",
+        "configuration",
+      );
+    }
     const url = `${this.config.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     let profile;
     try {
@@ -183,7 +197,10 @@ export class ChatAgent {
         },
         body: JSON.stringify({
           model: this.config.model,
-          messages: [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...messages],
+          messages: [
+            ...systemMessages.map((content) => ({ role: "system" as const, content })),
+            ...messages,
+          ],
           stream: true,
           stream_options: { include_usage: true },
           max_tokens: profile.responseReserveTokens,

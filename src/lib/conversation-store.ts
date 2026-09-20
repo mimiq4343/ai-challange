@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { join } from "node:path";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
+import { openChatDatabase, releaseChatDatabase } from "./sqlite-database";
 import type {
   ConversationSummary,
   ExchangeUsageInput,
@@ -91,12 +91,12 @@ export class SqliteConversationStore {
   private readonly updateConversationStatement: StatementSync;
   private readonly deleteConversationStatement: StatementSync;
 
+  private readonly databasePath: string;
+
   constructor(databasePath: string) {
-    mkdirSync(dirname(databasePath), { recursive: true });
-    this.database = new DatabaseSync(databasePath, { timeout: 5_000 });
+    this.databasePath = databasePath;
+    this.database = openChatDatabase(databasePath);
     this.database.exec(`
-      PRAGMA foreign_keys = ON;
-      PRAGMA journal_mode = WAL;
 
       CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY,
@@ -464,7 +464,7 @@ export class SqliteConversationStore {
   }
 
   close(): void {
-    this.database.close();
+    releaseChatDatabase(this.databasePath);
   }
 }
 

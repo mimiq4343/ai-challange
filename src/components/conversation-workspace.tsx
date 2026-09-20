@@ -23,9 +23,12 @@ export type MessageTokenBadge = {
   source: "provider" | "estimated";
 };
 
+export type ConversationMessageRoute = "messages" | "memory-messages";
+
 export type ConversationWorkspaceEvents = {
   onConversationChange?: (conversationId: string | null) => void;
   onUsagePreview?: (conversationId: string, breakdown: TokenBreakdown) => void;
+  onResponseHeaders?: (conversationId: string, headers: Headers) => void;
   onExchangeComplete?: (conversationId: string) => void;
   onExchangeFailed?: (conversationId: string) => void;
 };
@@ -35,6 +38,9 @@ type ConversationWorkspaceProps = {
   initialDetail: ConversationDetail | null;
   model: string | null;
   events?: ConversationWorkspaceEvents;
+  messageRoute?: ConversationMessageRoute;
+  requestBodyExtra?: Record<string, unknown>;
+  inputFooter?: React.ReactNode;
   messageTokenBadges?: readonly MessageTokenBadge[];
 };
 
@@ -90,6 +96,9 @@ export function ConversationWorkspace({
   initialDetail,
   model,
   events,
+  messageRoute = "messages",
+  requestBodyExtra,
+  inputFooter,
   messageTokenBadges,
 }: ConversationWorkspaceProps) {
   const [conversations, setConversations] = useState(initialConversations);
@@ -277,12 +286,15 @@ export function ConversationWorkspace({
         { id: assistantId, role: "assistant", content: "" },
       ]);
 
-      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-        signal: (abortRef.current = new AbortController()).signal,
-      });
+      const response = await fetch(
+        `/api/conversations/${encodeURIComponent(conversationId)}/${messageRoute}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...requestBodyExtra, content }),
+          signal: (abortRef.current = new AbortController()).signal,
+        },
+      );
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => null);
         throw new Error(
@@ -292,6 +304,7 @@ export function ConversationWorkspace({
         );
       }
 
+      events?.onResponseHeaders?.(conversationId, response.headers);
       const preview = readTokenBreakdown(response.headers);
       if (preview) events?.onUsagePreview?.(conversationId, preview);
 
@@ -504,6 +517,9 @@ export function ConversationWorkspace({
               </button>
             )}
           </div>
+          {inputFooter && (
+            <div className="mx-auto w-full max-w-[820px] pt-2">{inputFooter}</div>
+          )}
         </form>
       </section>
     </div>
