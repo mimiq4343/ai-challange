@@ -3,6 +3,13 @@
 - Branch `day-11` was created from `day-8`, not from `main`: Day 9 compression and
   Day 10 context strategies are deliberately absent. `/day-7` and `/day-8` keep
   working, including `/api/token-experiments/*`.
+- Merged into `main` on 2026-09-20 alongside Day 9 and Day 10. Conflicts were
+  resolved by combining, not replacing: `ConversationMessageRoute` now lists
+  `messages`, `compressed-messages` and `memory-messages`; `ChatRequestOptions`
+  keeps both `systemMessages` and Day 9's `maxOutputTokens`; the duplicated
+  system-message validation in `ChatAgent.respond` was collapsed into one check.
+  `context-strategy-store.ts` and `compression-run-store.ts` still open their own
+  `DatabaseSync`; only the conversation and memory stores share one connection.
 - Three layers, stored separately: STM is a verbatim window of the last 8 messages
   from `messages`; WM is one active task per conversation with typed slots; LTM is
   global across conversations and survives conversation deletion.
