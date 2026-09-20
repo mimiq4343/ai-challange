@@ -5,7 +5,7 @@
 Одно Next.js-приложение для заданий **AI Advent Challenge #9**. Каждый день
 разрабатывается в отдельной ветке и вливается в `main` после проверки. В `main`
 стабильна версия Day 7; ветка `day-8` добавляет измерение токенов, стоимости и
-переполнения контекстного окна.
+переполнения контекстного окна, а `day-11-kimi` — явную модель памяти агента.
 
 Стек: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4 и встроенный
 `node:sqlite`. Требуется Node.js **22.13 или новее**. LLM подключается через
@@ -24,6 +24,7 @@
 | `day-6` | Day 6 «Первый агент»                             |
 | `day-7` | Day 7 «Сохранение контекста между запусками»     |
 | `day-8` | Day 8 «Токены и переполнение контекста»            |
+| `day-11-kimi` | Day 11 «Модель памяти агента»                  |
 
 ## Хронология
 
@@ -94,7 +95,26 @@ stream фактические `prompt_tokens`, `completion_tokens`, cache split 
 токенов модели `nvidia/nemotron-3-embed-1b:free`. Retry нет; большой input и
 embedding vector не сохраняются и не логируются.
 
-## SQLite и API Day 7–8
+### Day 11 · Модель памяти агента — страница `/day-11`
+
+Три слоя памяти хранятся отдельно и явно наполняются пользователем:
+
+- **Краткосрочная** — сообщения активного диалога (таблица `messages`). История
+  уходит в запрос целиком и удаляется вместе с диалогом.
+- **Рабочая** — заметки текущей задачи (таблица `working_memory`), привязаны к
+  диалогу через `ON DELETE CASCADE`. Попадают в system prompt только этого
+  диалога.
+- **Долговременная** — профиль, решения и знания (таблица `long_term_memory`).
+  Глобальны: попадают в system prompt всех диалогов и переживают рестарт.
+
+Записи добавляются и удаляются только вручную через панель «Слои памяти» — агент
+сам ничего не сохраняет. `PersistentChatAgent` перед каждым вызовом собирает
+system prompt из базовой роли и обоих слоёв, поэтому панель показывает точный
+инъецируемый текст и его стоимость в токенах. Телеметрия Day 8 переехала в
+компактную строку под полем ввода; блок «Масштаб контекста» с overflow-тестом на
+странице убран (endpoint `/api/token-experiments/overflow` сохранён).
+
+## SQLite и API Day 7–11
 
 История создаётся автоматически в `data/chat.sqlite`. SQLite работает в
 WAL-режиме, foreign keys включены. Таблицы `conversations` и `messages` связаны
@@ -114,9 +134,23 @@ GET  /api/token-experiments/comparison
 POST /api/token-experiments/overflow
 ```
 
+```text
+GET    /api/memory?conversationId=
+POST   /api/memory/long-term
+DELETE /api/memory/long-term/:id
+POST   /api/memory/working
+DELETE /api/memory/working/:id
+```
+
 Day 8 добавляет STRICT-таблицы `exchange_usage` и `overflow_runs`. Сообщения и
 usage одного завершённого обмена сохраняются одной транзакцией. Старые обмены
 Day 7 рассчитываются при чтении как `estimated` без обратной записи в базу.
+
+Day 11 добавляет STRICT-таблицы `long_term_memory` (глобальная, категории
+`profile`/`decision`/`knowledge`) и `working_memory` (привязана к диалогу,
+каскадное удаление). Записи ограничены 500 символами; лимиты — 50 долговременных
+и 20 рабочих на диалог. Обе таблицы наполняются только явными действиями
+пользователя через API.
 
 Браузер отправляет только ID диалога и новое сообщение. Прежний контекст
 загружает сервер, поэтому клиент не может подменить сохранённую историю.
@@ -164,14 +198,16 @@ OPENROUTER_API_KEY=sk-or-...
 - Day 6: http://localhost:3000/day-6
 - Day 7: http://localhost:3000/day-7
 - Day 8: http://localhost:3000/day-8
+- Day 11: http://localhost:3000/day-11
 
 Если приложение открывается по сетевому адресу машины, этот origin должен быть
 разрешён в `allowedDevOrigins` файла `next.config.ts`.
 
-## Проверка Day 8
+## Проверка Day 11
 
 ```bash
 npm run test:tokens
+npm run test:memory
 npm run test:persistence
 npm run lint
 npx tsc --noEmit
@@ -181,6 +217,20 @@ npm run build
 `test:tokens` проверяет локальный токенизатор, лимит контекста, тарифы, provider
 usage, аналитику legacy-обменов и классификацию overflow-ответов. Тесты работают
 только с локальными tokenizer assets; загрузка моделей из сети отключена.
+
+`test:memory` проверяет раздельное хранение слоёв, каскад рабочей памяти,
+валидацию и лимиты записей, сборку system prompt и снапшот слоёв.
+
+Сценарий влияния памяти на ответы:
+
+1. На `/day-11` сохранить в долговременную память факт («Мой любимый напиток —
+   квас»), открыть новый диалог и спросить о нём: агент отвечает из
+   долговременного слоя при пустой истории.
+2. Добавить рабочую заметку («Кодовое слово задачи: КЕДР-42») и спросить её в
+   том же диалоге — агент знает слово. В новом диалоге — уже нет: рабочий слой
+   изолирован диалогом.
+3. Блок «Что уходит в system prompt» показывает точный инъецируемый текст и его
+   вес в токенах; строка телеметрии под полем ввода отражает рост `system`.
 
 Практический сценарий:
 
@@ -192,24 +242,30 @@ usage, аналитику legacy-обменов и классификацию ov
    outcome в UI с последней записью `overflow_runs`.
 5. Проверить, что `/day-6` и `/day-7` продолжают открываться.
 
-## Структура Day 7 и Day 8
+## Структура Day 7–11
 
 ```text
 src/
   app/
     api/conversations/                  REST API диалогов и usage
+    api/memory/                         snapshot и мутации слоёв памяти
     api/token-experiments/              comparison и реальный overflow
     day-7/page.tsx                      серверная загрузка постоянного чата
     day-8/page.tsx                      чат с token analytics
+    day-11/page.tsx                     чат с панелью слоёв памяти
   components/
     conversation-sidebar.tsx            список, создание и удаление
     conversation-workspace.tsx          чат, stream и token badges
+    day11-workspace.tsx                 чат, телеметрия и панель памяти
+    memory-panel.tsx                    три слоя: просмотр и явное сохранение
+    token-telemetry-strip.tsx           компактные токены под полем ввода
     day8-workspace.tsx                  синхронизация чата и аналитики
     token-analytics-panel.tsx           рост контекста и стоимость
     token-comparison.tsx                short/long/overflow сравнение
   lib/
     chat-agent.ts                       вызов LLM и provider usage
     conversation-store.ts               SQLite и атомарные транзакции
+    memory.ts                           сборка system prompt и snapshot слоёв
     conversation-types.ts               общие контракты
     model-profiles.ts                    лимиты моделей и tokenizer paths
     overflow-experiment.ts              один OpenRouter Embeddings запрос
@@ -225,4 +281,5 @@ tests/
   persistent-chat-agent.test.ts
   token-cost.test.ts
   token-counter.test.ts
+  memory.test.ts
 ```

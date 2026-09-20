@@ -160,6 +160,7 @@ export class ChatAgent {
   async respond(
     messages: ChatMessage[],
     signal: AbortSignal,
+    options?: { systemPrompt?: string },
   ): Promise<ChatAgentResponse> {
     const url = `${this.config.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     let profile;
@@ -183,7 +184,10 @@ export class ChatAgent {
         },
         body: JSON.stringify({
           model: this.config.model,
-          messages: [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...messages],
+          messages: [
+            { role: "system", content: options?.systemPrompt ?? CHAT_SYSTEM_PROMPT },
+            ...messages,
+          ],
           stream: true,
           stream_options: { include_usage: true },
           max_tokens: profile.responseReserveTokens,

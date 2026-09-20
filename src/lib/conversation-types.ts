@@ -20,6 +20,48 @@ export type ConversationDetail = {
   messages: StoredMessage[];
 };
 
+export type LongTermMemoryCategory = "profile" | "decision" | "knowledge";
+
+export type StoredLongTermMemory = {
+  id: number;
+  category: LongTermMemoryCategory;
+  content: string;
+  createdAt: string;
+};
+
+export type StoredWorkingMemory = {
+  id: number;
+  conversationId: string;
+  content: string;
+  createdAt: string;
+};
+
+export type LongTermMemoryEntry = StoredLongTermMemory & {
+  tokens: number;
+};
+
+export type WorkingMemoryEntry = StoredWorkingMemory & {
+  tokens: number;
+};
+
+export type MemorySnapshot = {
+  conversationId: string | null;
+  shortTerm: {
+    messageCount: number;
+    tokens: number;
+  };
+  working: WorkingMemoryEntry[];
+  longTerm: LongTermMemoryEntry[];
+  systemContext: string | null;
+  memoryContextTokens: number;
+};
+
+export const MEMORY_CATEGORY_LABELS: Record<LongTermMemoryCategory, string> = {
+  profile: "профиль",
+  decision: "решение",
+  knowledge: "знание",
+};
+
 export type TokenSource = "provider" | "estimated";
 
 export type TariffBand = "peak" | "off-peak";

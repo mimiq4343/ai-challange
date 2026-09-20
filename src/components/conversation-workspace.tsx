@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ListIcon,
   LightningIcon,
@@ -34,6 +34,7 @@ type ConversationWorkspaceProps = {
   initialConversations: ConversationSummary[];
   initialDetail: ConversationDetail | null;
   model: string | null;
+  composerFooter?: ReactNode;
   events?: ConversationWorkspaceEvents;
   messageTokenBadges?: readonly MessageTokenBadge[];
 };
@@ -91,6 +92,7 @@ export function ConversationWorkspace({
   model,
   events,
   messageTokenBadges,
+  composerFooter,
 }: ConversationWorkspaceProps) {
   const [conversations, setConversations] = useState(initialConversations);
   const [activeId, setActiveId] = useState(initialDetail?.conversation.id ?? null);
@@ -505,6 +507,7 @@ export function ConversationWorkspace({
             )}
           </div>
         </form>
+        {composerFooter}
       </section>
     </div>
   );

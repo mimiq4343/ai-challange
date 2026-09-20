@@ -5,15 +5,28 @@ import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type {
   ConversationSummary,
   ExchangeUsageInput,
+  LongTermMemoryCategory,
   MessageRole,
   OverflowRun,
   OverflowRunInput,
   StoredExchangeUsage,
+  StoredLongTermMemory,
   StoredMessage,
+  StoredWorkingMemory,
 } from "./conversation-types";
 
 const NEW_CONVERSATION_TITLE = "Новый диалог";
 const TITLE_LENGTH = 60;
+
+const MAX_MEMORY_CONTENT_LENGTH = 500;
+const MAX_LONG_TERM_ENTRIES = 50;
+const MAX_WORKING_ENTRIES_PER_CONVERSATION = 20;
+
+const LONG_TERM_CATEGORIES: readonly LongTermMemoryCategory[] = [
+  "profile",
+  "decision",
+  "knowledge",
+];
 
 type ConversationRow = {
   id: string;
@@ -76,6 +89,40 @@ export class ConversationNotFoundError extends Error {
   }
 }
 
+export class MemoryValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MemoryValidationError";
+  }
+}
+
+type LongTermMemoryRow = {
+  id: number;
+  category: LongTermMemoryCategory;
+  content: string;
+  created_at: string;
+};
+
+type WorkingMemoryRow = {
+  id: number;
+  conversation_id: string;
+  content: string;
+  created_at: string;
+};
+
+function normalizeMemoryContent(content: string): string {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) {
+    throw new MemoryValidationError("Запись памяти не может быть пустой.");
+  }
+  if (normalized.length > MAX_MEMORY_CONTENT_LENGTH) {
+    throw new MemoryValidationError(
+      `Запись памяти длиннее ${MAX_MEMORY_CONTENT_LENGTH} символов.`,
+    );
+  }
+  return normalized;
+}
+
 
 export class SqliteConversationStore {
   private readonly database: DatabaseSync;
@@ -90,6 +137,14 @@ export class SqliteConversationStore {
   private readonly getLatestOverflowRunStatement: StatementSync;
   private readonly updateConversationStatement: StatementSync;
   private readonly deleteConversationStatement: StatementSync;
+  private readonly listLongTermMemoryStatement: StatementSync;
+  private readonly countLongTermMemoryStatement: StatementSync;
+  private readonly insertLongTermMemoryStatement: StatementSync;
+  private readonly deleteLongTermMemoryStatement: StatementSync;
+  private readonly listWorkingMemoryStatement: StatementSync;
+  private readonly countWorkingMemoryStatement: StatementSync;
+  private readonly insertWorkingMemoryStatement: StatementSync;
+  private readonly deleteWorkingMemoryStatement: StatementSync;
 
   constructor(databasePath: string) {
     mkdirSync(dirname(databasePath), { recursive: true });
@@ -158,6 +213,25 @@ export class SqliteConversationStore {
         cost_micros_usd INTEGER NOT NULL CHECK (cost_micros_usd >= 0),
         created_at TEXT NOT NULL
       ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS long_term_memory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT NOT NULL
+          CHECK (category IN ('profile', 'decision', 'knowledge')),
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS working_memory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id TEXT NOT NULL
+          REFERENCES conversations(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS working_memory_conversation_id
+        ON working_memory(conversation_id, id);
     `);
 
     this.listConversationsStatement = this.database.prepare(`
@@ -183,6 +257,40 @@ export class SqliteConversationStore {
     this.insertMessageStatement = this.database.prepare(`
       INSERT INTO messages (conversation_id, role, content, created_at)
       VALUES (?, ?, ?, ?)
+    `);
+    this.listLongTermMemoryStatement = this.database.prepare(`
+      SELECT id, category, content, created_at
+      FROM long_term_memory
+      ORDER BY id ASC
+    `);
+    this.countLongTermMemoryStatement = this.database.prepare(`
+      SELECT COUNT(*) AS count FROM long_term_memory
+    `);
+    this.insertLongTermMemoryStatement = this.database.prepare(`
+      INSERT INTO long_term_memory (category, content, created_at)
+      VALUES (?, ?, ?)
+    `);
+    this.deleteLongTermMemoryStatement = this.database.prepare(`
+      DELETE FROM long_term_memory
+      WHERE id = ?
+    `);
+    this.listWorkingMemoryStatement = this.database.prepare(`
+      SELECT id, conversation_id, content, created_at
+      FROM working_memory
+      WHERE conversation_id = ?
+      ORDER BY id ASC
+    `);
+    this.countWorkingMemoryStatement = this.database.prepare(`
+      SELECT COUNT(*) AS count FROM working_memory
+      WHERE conversation_id = ?
+    `);
+    this.insertWorkingMemoryStatement = this.database.prepare(`
+      INSERT INTO working_memory (conversation_id, content, created_at)
+      VALUES (?, ?, ?)
+    `);
+    this.deleteWorkingMemoryStatement = this.database.prepare(`
+      DELETE FROM working_memory
+      WHERE id = ?
     `);
     this.insertUsageStatement = this.database.prepare(`
       INSERT INTO exchange_usage (
@@ -461,6 +569,87 @@ export class SqliteConversationStore {
 
   deleteConversation(id: string): boolean {
     return this.deleteConversationStatement.run(id).changes > 0;
+  }
+
+  listLongTermMemory(): StoredLongTermMemory[] {
+    return (this.listLongTermMemoryStatement.all() as LongTermMemoryRow[]).map((row) => ({
+      id: row.id,
+      category: row.category,
+      content: row.content,
+      createdAt: row.created_at,
+    }));
+  }
+
+  addLongTermMemory(
+    category: LongTermMemoryCategory,
+    content: string,
+  ): StoredLongTermMemory {
+    if (!LONG_TERM_CATEGORIES.includes(category)) {
+      throw new MemoryValidationError(`Неизвестная категория памяти: ${category}.`);
+    }
+    const normalized = normalizeMemoryContent(content);
+    const { count } = this.countLongTermMemoryStatement.get() as { count: number };
+    if (count >= MAX_LONG_TERM_ENTRIES) {
+      throw new MemoryValidationError(
+        `Долговременная память заполнена: максимум ${MAX_LONG_TERM_ENTRIES} записей.`,
+      );
+    }
+
+    const timestamp = new Date().toISOString();
+    const result = this.insertLongTermMemoryStatement.run(category, normalized, timestamp);
+    return {
+      id: Number(result.lastInsertRowid),
+      category,
+      content: normalized,
+      createdAt: timestamp,
+    };
+  }
+
+  deleteLongTermMemory(id: number): boolean {
+    return this.deleteLongTermMemoryStatement.run(id).changes > 0;
+  }
+
+  listWorkingMemory(conversationId: string): StoredWorkingMemory[] {
+    return (this.listWorkingMemoryStatement.all(conversationId) as WorkingMemoryRow[]).map(
+      (row) => ({
+        id: row.id,
+        conversationId: row.conversation_id,
+        content: row.content,
+        createdAt: row.created_at,
+      }),
+    );
+  }
+
+  addWorkingMemory(conversationId: string, content: string): StoredWorkingMemory {
+    if (!this.getConversation(conversationId)) {
+      throw new ConversationNotFoundError(conversationId);
+    }
+    const normalized = normalizeMemoryContent(content);
+    const { count } = this.countWorkingMemoryStatement.get(conversationId) as {
+      count: number;
+    };
+    if (count >= MAX_WORKING_ENTRIES_PER_CONVERSATION) {
+      throw new MemoryValidationError(
+        `Рабочая память диалога заполнена: максимум ${MAX_WORKING_ENTRIES_PER_CONVERSATION} записей.`,
+      );
+    }
+
+    const timestamp = new Date().toISOString();
+    const result = this.insertWorkingMemoryStatement.run(
+      conversationId,
+      normalized,
+      timestamp,
+    );
+    return {
+      id: Number(result.lastInsertRowid),
+      conversationId,
+      content: normalized,
+      createdAt: timestamp,
+    };
+  }
+
+  deleteWorkingMemory(id: number): boolean {
+    return this.deleteWorkingMemoryStatement.run(id).changes > 0;
   }
 
   close(): void {
