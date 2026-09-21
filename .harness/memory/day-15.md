@@ -1,6 +1,6 @@
 # Day 15: controlled transitions
 
-- Branch `day-15` was created from `main` (days 1–14). Day 13 already had the stage
+- Branch `day-15` was created from `main` (days 1–14) and merged back on 2026-09-21. Day 13 already had the stage
   table, the pause and the journal; Day 15 adds preconditions, plan approval and a
   visible reaction to a rejected transition.
 - Preconditions live in `task-machine.ts` as a pure function: `planning → execution`
