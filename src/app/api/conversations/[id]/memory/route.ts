@@ -1,6 +1,7 @@
 import { getConversationStore } from "@/lib/conversation-store";
 import { SHORT_TERM_WINDOW_MESSAGES } from "@/lib/memory-composer";
 import { getMemoryStore } from "@/lib/memory-store";
+import { getProfileStore } from "@/lib/profile-store";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const messages = store.getMessages(id);
-  const snapshot = getMemoryStore().getSnapshot(id, {
+  const snapshot = getMemoryStore().getSnapshot(id, getProfileStore().getActiveProfile().id, {
     windowMessages: SHORT_TERM_WINDOW_MESSAGES,
     totalMessages: messages.length,
     includedMessages: Math.min(messages.length, SHORT_TERM_WINDOW_MESSAGES),

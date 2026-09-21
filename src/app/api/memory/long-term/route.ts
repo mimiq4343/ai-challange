@@ -1,4 +1,5 @@
 import { getMemoryStore } from "@/lib/memory-store";
+import { getProfileStore } from "@/lib/profile-store";
 import type { LongTermKind } from "@/lib/memory-types";
 
 export const runtime = "nodejs";
@@ -12,7 +13,8 @@ const LONG_TERM_KINDS: Record<LongTermKind, true> = {
 const KEY_PATTERN = /^[a-z0-9_]{2,64}$/;
 
 export async function GET() {
-  return Response.json({ entries: getMemoryStore().listLongTerm() });
+  const profile = getProfileStore().getActiveProfile();
+  return Response.json({ entries: getMemoryStore().listLongTerm(profile.id) });
 }
 
 export async function POST(request: Request) {
@@ -54,6 +56,7 @@ export async function POST(request: Request) {
 
   const entry = getMemoryStore().upsertLongTerm(
     {
+      profileId: getProfileStore().getActiveProfile().id,
       kind: kind as LongTermKind,
       key,
       value,

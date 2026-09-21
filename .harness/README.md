@@ -21,6 +21,7 @@ corrections as short single-topic entries, written in English. Start from
 - [Day 9 · history compression](superpowers/specs/2026-09-14-day-9-history-compression-design.md)
 - [Day 10 · context strategies](superpowers/specs/2026-09-14-day-10-context-strategies-design.md)
 - [Day 11 · memory layers](superpowers/specs/2026-09-20-day-11-memory-layers-design.md)
+- [Day 12 · personalization](superpowers/specs/2026-09-20-day-12-personalization-design.md)
 
 ## Superpowers plans
 
@@ -32,11 +33,12 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 - [Day 9 · history compression](superpowers/plans/2026-09-14-day-9-history-compression/00-overview.md)
 - [Day 10 · context strategies](superpowers/plans/2026-09-14-day-10-context-strategies.md)
 - [Day 11 · memory layers](superpowers/plans/2026-09-20-day-11-memory-layers.md)
+- [Day 12 · personalization](superpowers/plans/2026-09-20-day-12-personalization.md)
 
 ## Conventions
 
 - Day 11 was developed on a branch created from `day-8`; after the merge `main`
-  carries Day 9, Day 10 and Day 11 together.
+  carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main`.
 - Reports belong in topical subdirectories of `reports/`, historical material in
   `archive/`; create either directory only when there is material for it.
 - This repository has no `openspec/` directory, so OpenSpec artifacts and steps do

@@ -6,6 +6,7 @@ import { after, test } from "node:test";
 
 import { SqliteConversationStore } from "../src/lib/conversation-store";
 import { SqliteMemoryStore } from "../src/lib/memory-store";
+import { SqliteProfileStore } from "../src/lib/profile-store";
 
 const temporaryDirectories: string[] = [];
 
@@ -21,14 +22,22 @@ async function createStores() {
   const databasePath = join(directory, "chat.sqlite");
   const conversations = new SqliteConversationStore(databasePath);
   const memory = new SqliteMemoryStore(databasePath);
-  return { conversations, memory, databasePath };
+  const profiles = new SqliteProfileStore(databasePath);
+  return {
+    conversations,
+    memory,
+    profiles,
+    profileId: profiles.getActiveProfile().id,
+    databasePath,
+  };
 }
 
 test("long term memory keeps one entry per kind and key", async () => {
-  const { conversations, memory } = await createStores();
+  const { conversations, memory, profiles, profileId } = await createStores();
   const conversation = conversations.createConversation();
 
   memory.upsertLongTerm({
+    profileId,
     kind: "profile",
     key: "favourite_color",
     value: "синий",
@@ -37,6 +46,7 @@ test("long term memory keeps one entry per kind and key", async () => {
     sourceConversationId: conversation.id,
   });
   const updated = memory.upsertLongTerm({
+    profileId,
     kind: "profile",
     key: "favourite_color",
     value: "зелёный",
@@ -45,18 +55,19 @@ test("long term memory keeps one entry per kind and key", async () => {
     sourceConversationId: conversation.id,
   });
 
-  const entries = memory.listLongTerm();
+  const entries = memory.listLongTerm(profileId);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].id, updated.id);
   assert.equal(entries[0].value, "зелёный");
   assert.equal(entries[0].origin, "user");
 
   memory.close();
+  profiles.close();
   conversations.close();
 });
 
 test("deleting a conversation clears working memory but keeps long term entries", async () => {
-  const { conversations, memory } = await createStores();
+  const { conversations, memory, profiles, profileId } = await createStores();
   const conversation = conversations.createConversation();
   const task = memory.upsertActiveTask(conversation.id, {
     title: "Миграция",
@@ -68,6 +79,7 @@ test("deleting a conversation clears working memory but keeps long term entries"
     { conversationId: conversation.id, assistantMessageId: null },
   );
   memory.upsertLongTerm({
+    profileId,
     kind: "decision",
     key: "storage",
     value: "SQLite остаётся источником истины",
@@ -83,16 +95,17 @@ test("deleting a conversation clears working memory but keeps long term entries"
 
   assert.equal(memory.getWorkingMemory(conversation.id), null);
   assert.equal(memory.listWrites(conversation.id).length, 0);
-  const longTerm = memory.listLongTerm();
+  const longTerm = memory.listLongTerm(profileId);
   assert.equal(longTerm.length, 1);
   assert.equal(longTerm[0].sourceConversationId, null);
 
   memory.close();
+  profiles.close();
   conversations.close();
 });
 
 test("a conversation has at most one active task", async () => {
-  const { conversations, memory } = await createStores();
+  const { conversations, memory, profiles, profileId } = await createStores();
   const conversation = conversations.createConversation();
 
   const first = memory.upsertActiveTask(conversation.id, { title: "Первая", goal: null });
@@ -111,16 +124,17 @@ test("a conversation has at most one active task", async () => {
   assert.notEqual(second.id, first.id);
 
   memory.close();
+  profiles.close();
   conversations.close();
 });
 
 test("router result writes both layers once and journals every write", async () => {
-  const { conversations, memory } = await createStores();
+  const { conversations, memory, profiles, profileId } = await createStores();
   const conversation = conversations.createConversation();
   conversations.saveExchange(conversation.id, "Запомни: я пишу на TypeScript", "Запомнил");
   const assistantMessageId = conversations.getMessages(conversation.id).at(-1)!.id;
 
-  const applied = memory.applyRouterResult(conversation.id, assistantMessageId, {
+  const applied = memory.applyRouterResult(conversation.id, assistantMessageId, profileId, {
     task: { title: "Настройка агента", goal: "Собрать модель памяти" },
     closeTask: false,
     writes: [
@@ -139,7 +153,7 @@ test("router result writes both layers once and journals every write", async () 
 
   assert.equal(applied, 2);
   assert.equal(memory.getWorkingMemory(conversation.id)?.slots.length, 1);
-  assert.equal(memory.listLongTerm()[0].key, "language");
+  assert.equal(memory.listLongTerm(profileId)[0].key, "language");
 
   const writes = memory.listWrites(conversation.id);
   assert.equal(writes.length, 2);
@@ -153,17 +167,19 @@ test("router result writes both layers once and journals every write", async () 
   );
 
   memory.close();
+  profiles.close();
   conversations.close();
 });
 
 test("exchange memory usage round trips layer tokens and router cost", async () => {
-  const { conversations, memory } = await createStores();
+  const { conversations, memory, profiles, profileId } = await createStores();
   const conversation = conversations.createConversation();
   conversations.saveExchange(conversation.id, "Вопрос", "Ответ");
   const assistantMessageId = conversations.getMessages(conversation.id).at(-1)!.id;
 
   memory.saveExchangeMemoryUsage(conversation.id, assistantMessageId, {
     systemTokens: 40,
+    profileTokens: 0,
     longTermTokens: 120,
     workingTokens: 0,
     shortTermTokens: 300,
@@ -173,7 +189,7 @@ test("exchange memory usage round trips layer tokens and router cost", async () 
     contextTokens: 4_568,
     contextLimit: 1_000_000,
     shortTermMessages: 6,
-    layers: { shortTerm: true, working: false, longTerm: true },
+    layers: { shortTerm: true, working: false, longTerm: true, profile: false },
     router: { promptTokens: 220, completionTokens: 40, costMicrosUsd: 114 },
   });
 
@@ -181,10 +197,16 @@ test("exchange memory usage round trips layer tokens and router cost", async () 
   assert.equal(usage?.longTermTokens, 120);
   assert.equal(usage?.workingTokens, 0);
   assert.equal(usage?.shortTermMessages, 6);
-  assert.deepEqual(usage?.layers, { shortTerm: true, working: false, longTerm: true });
+  assert.deepEqual(usage?.layers, {
+    shortTerm: true,
+    working: false,
+    longTerm: true,
+    profile: false,
+  });
   assert.equal(usage?.router?.costMicrosUsd, 114);
   assert.equal(usage?.contextTokens, 4_568);
 
   memory.close();
+  profiles.close();
   conversations.close();
 });

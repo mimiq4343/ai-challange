@@ -1,4 +1,9 @@
 import type { MemoryRouterLlm } from "./memory-router-llm";
+import {
+  isPreferenceValue,
+  PROFILE_FIELD_VALUES,
+  type UserProfile,
+} from "./profile-types";
 import type {
   LongTermKind,
   MemoryRouterResult,
@@ -8,7 +13,7 @@ import type {
 } from "./memory-types";
 import { calculateDeepSeekCost } from "./token-cost";
 
-const MAX_WRITES = 5;
+const MAX_WRITES = 6;
 const MAX_KEY_LENGTH = 64;
 const MAX_VALUE_LENGTH = 400;
 const MAX_TITLE_LENGTH = 80;
@@ -30,11 +35,13 @@ const WORKING_KINDS: Record<WorkingSlotKind, true> = {
 
 export const MEMORY_ROUTER_SYSTEM_PROMPT = `Ты маршрутизатор памяти агента и не общаешься с пользователем.
 Разбери последний обмен и реши, что сохранить в память. Ответ — только JSON:
-{"task": {"title": "строка", "goal": "строка или null"} | null, "closeTask": false, "writes": [{"layer": "long_term", "kind": "profile|decision|knowledge", "key": "snake_case", "value": "строка", "reason": "строка"}, {"layer": "working", "kind": "fact|constraint|step|open_question", "value": "строка", "reason": "строка"}]}
+{"task": {"title": "строка", "goal": "строка или null"} | null, "closeTask": false, "writes": [{"layer": "long_term", "kind": "profile|decision|knowledge", "key": "snake_case", "value": "строка", "reason": "строка"}, {"layer": "working", "kind": "fact|constraint|step|open_question", "value": "строка", "reason": "строка"}, {"layer": "profile", "kind": "tone|verbosity|format|language|expertise|role|constraint", "value": "строка", "reason": "строка"}]}
 
 Правила маршрутизации:
 - long_term — устойчивые сведения о пользователе, принятые решения и знания, полезные в других диалогах, а также всё, что пользователь явно просил запомнить. profile — про пользователя, decision — принятое решение, knowledge — проверенный факт предметной области.
 - working — данные текущей задачи: её факты, ограничения, шаги и открытые вопросы.
+- profile — то, КАК пользователь просит с ним разговаривать. Допустимые значения: tone = neutral|friendly|formal|direct; verbosity = brief|balanced|detailed; format = prose|bullets|table|code_first; language = ru|en|auto; expertise = beginner|intermediate|expert; role — свободный текст о роли пользователя; constraint — свободный запрет или требование к ответам.
+- «Отвечай короче» — это verbosity = brief, «давай сразу код» — format = code_first, «без эмодзи» — constraint.
 - Дословный диалог уже сохранён отдельно: не пересказывай реплики, приветствия и формулировки ответа.
 - task заполняй, только когда в обмене видна цель работы; иначе null.
 - closeTask = true только если пользователь явно объявил задачу завершённой.
@@ -55,6 +62,7 @@ export function buildMemoryRouterPrompt(input: {
   response: string;
   working: WorkingMemory | null;
   longTermKeys: readonly string[];
+  profile: UserProfile | null;
 }): string {
   const task = input.working
     ? `${input.working.task.title}${input.working.task.goal ? ` — ${input.working.task.goal}` : ""}`
@@ -63,6 +71,13 @@ export function buildMemoryRouterPrompt(input: {
     input.working && input.working.slots.length > 0
       ? input.working.slots.map((slot) => `${slot.kind}: ${slot.value}`).join("; ")
       : "нет слотов";
+  const profile = input.profile
+    ? `${input.profile.name}: tone=${input.profile.tone}, verbosity=${input.profile.verbosity}, format=${input.profile.format}, language=${input.profile.language}, expertise=${input.profile.expertise}, role=${input.profile.role ?? "не задана"}, ограничения=${
+        input.profile.constraints.length > 0
+          ? input.profile.constraints.map((constraint) => constraint.value).join("; ")
+          : "нет"
+      }`
+    : "профиль не подключён";
 
   return [
     `Известные ключи долговременной памяти: ${
@@ -70,6 +85,7 @@ export function buildMemoryRouterPrompt(input: {
     }`,
     `Текущая задача: ${task}`,
     `Слоты рабочей памяти: ${slots}`,
+    `Текущий профиль: ${profile}`,
     `Сообщение пользователя: ${input.request.slice(0, MAX_EXCERPT_LENGTH)}`,
     `Ответ агента: ${input.response.slice(0, MAX_EXCERPT_LENGTH)}`,
   ].join("\n");
@@ -125,6 +141,18 @@ function parseWrite(value: unknown): MemoryRouterWrite | null {
     return { layer: "working", kind: kind as WorkingSlotKind, value: text, reason };
   }
 
+  if (candidate.layer === "profile") {
+    const kind = candidate.kind;
+    if (typeof kind !== "string") return null;
+    if (kind === "constraint" || kind === "role") {
+      return { layer: "profile", kind, value: text, reason };
+    }
+    if (!(kind in PROFILE_FIELD_VALUES)) return null;
+    const field = kind as keyof typeof PROFILE_FIELD_VALUES;
+    if (!isPreferenceValue(field, text)) return null;
+    return { layer: "profile", kind: field, value: text, reason };
+  }
+
   return null;
 }
 
@@ -156,6 +184,7 @@ export async function runMemoryRouter(input: {
   response: string;
   working: WorkingMemory | null;
   longTermKeys: readonly string[];
+  profile: UserProfile | null;
 }): Promise<MemoryRouterResult> {
   const completion = await input.llm.complete({
     systemPrompt: MEMORY_ROUTER_SYSTEM_PROMPT,
