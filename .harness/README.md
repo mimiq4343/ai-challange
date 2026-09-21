@@ -24,6 +24,7 @@ corrections as short single-topic entries, written in English. Start from
 - [Day 12 · personalization](superpowers/specs/2026-09-20-day-12-personalization-design.md)
 - [Day 13 · task state machine](superpowers/specs/2026-09-21-day-13-task-state-machine-design.md)
 - [Day 14 · invariants](superpowers/specs/2026-09-21-day-14-invariants-design.md)
+- [Day 15 · controlled transitions](superpowers/specs/2026-09-21-day-15-controlled-transitions-design.md)
 
 ## Superpowers plans
 
@@ -38,6 +39,7 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 - [Day 12 · personalization](superpowers/plans/2026-09-20-day-12-personalization.md)
 - [Day 13 · task state machine](superpowers/plans/2026-09-21-day-13-task-state-machine.md)
 - [Day 14 · invariants](superpowers/plans/2026-09-21-day-14-invariants.md)
+- [Day 15 · controlled transitions](superpowers/plans/2026-09-21-day-15-controlled-transitions.md)
 
 ## Conventions
 
