@@ -12,6 +12,8 @@ import type {
   WorkingSlot,
   WorkingSlotKind,
 } from "./memory-types";
+import { TASK_STAGE_LABELS } from "./task-machine";
+import type { TaskSnapshot } from "./task-types";
 import {
   PROFILE_EXPERTISES,
   PROFILE_FORMATS,
@@ -43,6 +45,58 @@ const WORKING_LABELS: Record<WorkingSlotKind, string> = {
 const LONG_TERM_HEADER =
   "Долговременная память агента. Используй эти сведения как известные факты и не переспрашивай их:";
 const WORKING_HEADER = "Рабочая память — состояние текущей задачи:";
+const TASK_HEADER = "Состояние задачи";
+
+/**
+ * Правила поведения для дня с конечным автоматом: без них состояние задачи
+ * остаётся справкой, а агент отвечает одним большим сообщением.
+ */
+export const TASK_STEPWISE_RULES = `Ты ведёшь работу по конечному автомату задачи и обязан держаться его состояния.
+На этапе планирования, если плана ещё нет, первым делом выдай нумерованный список из 3–7 шагов, по одной короткой строке на шаг, и только после списка задай уточняющие вопросы. Сами шаги на этом этапе не выполняй и не расписывай их содержимое.
+Если план уже есть, не переписывай его: назови текущий шаг и спроси подтверждение перехода к выполнению.
+На этапе выполнения работай ровно над текущим шагом, не забегая в следующие, и заканчивай ответ тем, что сделано и что требуется дальше.
+На этапе проверки предъяви результат к приёмке и перечисли, что осталось проверить.
+Если задача на паузе, отвечай на вопрос, но не продвигай работу дальше текущего шага.
+Согласованный план не пересказывай заново: он уже сохранён в состоянии.`;
+
+/** Собирает блок конечного автомата: этап, шаг и ожидаемое действие. */
+export function renderTaskBlock(snapshot: TaskSnapshot): string {
+  const { run, steps } = snapshot;
+  const done = steps.filter((step) => step.status === "done");
+  const remaining = steps.filter(
+    (step) => step.status === "pending" || step.status === "active",
+  );
+  const current = steps.find((step) => step.id === run.currentStepId) ?? remaining[0];
+  const lines = [
+    `${TASK_HEADER} «${run.title}»: этап ${TASK_STAGE_LABELS[run.stage]}, ${
+      run.paused ? "на паузе" : "пауза снята"
+    }.`,
+  ];
+  if (run.goal) lines.push(`Цель: ${run.goal}.`);
+  if (current) {
+    lines.push(`Шаг ${current.position} из ${steps.length}: «${current.title}».`);
+  } else if (run.stage === "planning") {
+    lines.push("Плана ещё нет: сначала предложи нумерованный список шагов.");
+  }
+  if (done.length > 0) {
+    lines.push(
+      `Выполнено: ${done.map((step) => `${step.position}) ${step.title}`).join("; ")}.`,
+    );
+  }
+  const pending = remaining.filter((step) => step.id !== current?.id);
+  if (pending.length > 0) {
+    lines.push(
+      `Осталось: ${pending.map((step) => `${step.position}) ${step.title}`).join("; ")}.`,
+    );
+  }
+  if (run.blockedReason) lines.push(`Причина блокировки: ${run.blockedReason}.`);
+  lines.push(
+    `Ожидается: ${run.expectedActor === "agent" ? "агент" : "пользователь"} — ${run.expectedAction}.`,
+  );
+  lines.push("План и решения уже согласованы — не переспрашивай их заново.");
+
+  return lines.join("\n");
+}
 
 /** Собирает блок персонализации из профиля пользователя. */
 export function renderProfileBlock(profile: UserProfile): string {
@@ -69,6 +123,7 @@ export function renderProfileBlock(profile: UserProfile): string {
 export type ComposedMemoryPrompt = {
   systemMessages: string[];
   profileBlock: string | null;
+  taskBlock: string | null;
   longTermBlock: string | null;
   workingBlock: string | null;
   history: ChatMessage[];
@@ -105,12 +160,14 @@ async function selectWithinBudget<T>(
 export async function composeMemoryPrompt(input: {
   messages: readonly StoredMessage[];
   profile: UserProfile | null;
+  task?: TaskSnapshot | null;
   longTerm: readonly LongTermEntry[];
   working: WorkingMemory | null;
   layers: MemoryLayerToggles;
 }): Promise<ComposedMemoryPrompt> {
   const profileBlock =
     input.layers.profile && input.profile ? renderProfileBlock(input.profile) : null;
+  const taskBlock = input.layers.task && input.task ? renderTaskBlock(input.task) : null;
 
   const longTermSelection = input.layers.longTerm
     ? await selectWithinBudget(
@@ -156,12 +213,14 @@ export async function composeMemoryPrompt(input: {
 
   return {
     systemMessages: [
-      CHAT_SYSTEM_PROMPT,
+      taskBlock ? `${CHAT_SYSTEM_PROMPT}\n\n${TASK_STEPWISE_RULES}` : CHAT_SYSTEM_PROMPT,
       profileBlock,
+      taskBlock,
       longTermBlock,
       workingBlock,
     ].filter((block): block is string => block !== null),
     profileBlock,
+    taskBlock,
     longTermBlock,
     workingBlock,
     history: window.map(({ role, content }) => ({ role, content })),
@@ -187,10 +246,11 @@ export async function countMemoryPromptTokens(input: {
   const contextLimit = input.contextLimit ?? DEEPSEEK_FLASH_PROFILE.contextWindow;
   const reservedOutputTokens =
     input.reservedOutputTokens ?? DEEPSEEK_FLASH_PROFILE.responseReserveTokens;
-  const { profileBlock, longTermBlock, workingBlock } = input.composed;
+  const { profileBlock, taskBlock, longTermBlock, workingBlock } = input.composed;
   const base = input.composed.systemMessages[0];
   const withProfile = profileBlock ? [base, profileBlock] : [base];
-  const withLongTerm = longTermBlock ? [...withProfile, longTermBlock] : withProfile;
+  const withTask = taskBlock ? [...withProfile, taskBlock] : withProfile;
+  const withLongTerm = longTermBlock ? [...withTask, longTermBlock] : withTask;
   const withWorking = workingBlock ? [...withLongTerm, workingBlock] : withLongTerm;
 
   const toSystem = (contents: readonly string[]) =>
@@ -199,6 +259,7 @@ export async function countMemoryPromptTokens(input: {
   const [
     systemTokens,
     profilePrefix,
+    taskPrefix,
     longTermPrefix,
     workingPrefix,
     historyPrefix,
@@ -206,6 +267,7 @@ export async function countMemoryPromptTokens(input: {
   ] = await Promise.all([
     countTemplatedMessages(toSystem([base]), false),
     countTemplatedMessages(toSystem(withProfile), false),
+    countTemplatedMessages(toSystem(withTask), false),
     countTemplatedMessages(toSystem(withLongTerm), false),
     countTemplatedMessages(toSystem(withWorking), false),
     countTemplatedMessages([...toSystem(withWorking), ...input.composed.history], false),
@@ -220,13 +282,15 @@ export async function countMemoryPromptTokens(input: {
   ]);
 
   const profileTokens = profilePrefix - systemTokens;
-  const longTermTokens = longTermPrefix - profilePrefix;
+  const taskTokens = taskPrefix - profilePrefix;
+  const longTermTokens = longTermPrefix - taskPrefix;
   const workingTokens = workingPrefix - longTermPrefix;
   const shortTermTokens = historyPrefix - workingPrefix;
   const requestTokens = promptTokens - historyPrefix;
 
   if (
     profileTokens < 0 ||
+    taskTokens < 0 ||
     longTermTokens < 0 ||
     workingTokens < 0 ||
     shortTermTokens < 0 ||
@@ -238,6 +302,7 @@ export async function countMemoryPromptTokens(input: {
   return {
     systemTokens,
     profileTokens,
+    taskTokens,
     longTermTokens,
     workingTokens,
     shortTermTokens,

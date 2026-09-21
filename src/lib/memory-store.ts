@@ -76,6 +76,7 @@ type UsageRow = {
   assistant_message_id: number;
   system_tokens: number;
   profile_tokens: number;
+  task_tokens: number;
   long_term_tokens: number;
   working_tokens: number;
   short_term_tokens: number;
@@ -223,16 +224,17 @@ export class SqliteMemoryStore {
     this.insertUsageStatement = this.database.prepare(`
       INSERT INTO memory_exchange_usage (
         conversation_id, assistant_message_id, system_tokens, profile_tokens,
-        long_term_tokens,
+        task_tokens, long_term_tokens,
         working_tokens, short_term_tokens, request_tokens, prompt_tokens,
         reserved_output_tokens, context_limit, short_term_messages, layers_enabled,
         router_prompt_tokens, router_completion_tokens, router_cost_micros_usd,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     this.getLatestUsageStatement = this.database.prepare(`
       SELECT id, conversation_id, assistant_message_id, system_tokens,
-             profile_tokens, long_term_tokens, working_tokens, short_term_tokens,
+             profile_tokens, task_tokens, long_term_tokens, working_tokens,
+             short_term_tokens,
              request_tokens,
              prompt_tokens, reserved_output_tokens, context_limit,
              short_term_messages, layers_enabled, router_prompt_tokens,
@@ -407,6 +409,7 @@ export class SqliteMemoryStore {
       usage.layers.working ? "wm" : null,
       usage.layers.longTerm ? "ltm" : null,
       usage.layers.profile ? "prof" : null,
+      usage.layers.task ? "task" : null,
     ]
       .filter((layer): layer is string => layer !== null)
       .join(",");
@@ -416,6 +419,7 @@ export class SqliteMemoryStore {
       assistantMessageId,
       usage.systemTokens,
       usage.profileTokens,
+      usage.taskTokens,
       usage.longTermTokens,
       usage.workingTokens,
       usage.shortTermTokens,
@@ -443,6 +447,7 @@ export class SqliteMemoryStore {
       assistantMessageId: row.assistant_message_id,
       systemTokens: row.system_tokens,
       profileTokens: row.profile_tokens,
+      taskTokens: row.task_tokens,
       longTermTokens: row.long_term_tokens,
       workingTokens: row.working_tokens,
       shortTermTokens: row.short_term_tokens,
@@ -457,6 +462,7 @@ export class SqliteMemoryStore {
         working: enabled.includes("wm"),
         longTerm: enabled.includes("ltm"),
         profile: enabled.includes("prof"),
+        task: enabled.includes("task"),
       },
       router:
         row.router_prompt_tokens === null ||

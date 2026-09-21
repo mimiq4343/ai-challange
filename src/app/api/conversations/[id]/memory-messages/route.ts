@@ -10,7 +10,9 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 /** Day 11 не знает о персонализации: слой профиля здесь всегда выключен. */
 function parseLayers(value: unknown): MemoryLayerToggles | null {
-  if (value === undefined) return { ...ALL_MEMORY_LAYERS_ENABLED, profile: false };
+  if (value === undefined) {
+    return { ...ALL_MEMORY_LAYERS_ENABLED, profile: false, task: false };
+  }
   if (typeof value !== "object" || value === null) return null;
 
   const candidate = value as Record<string, unknown>;
@@ -22,6 +24,7 @@ function parseLayers(value: unknown): MemoryLayerToggles | null {
     working: candidate.working as boolean,
     longTerm: candidate.longTerm as boolean,
     profile: false,
+    task: false,
   };
 }
 

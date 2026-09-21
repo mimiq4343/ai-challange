@@ -98,6 +98,7 @@ const SCHEMA = `
       REFERENCES messages(id) ON DELETE CASCADE,
     system_tokens INTEGER NOT NULL CHECK (system_tokens >= 0),
     profile_tokens INTEGER NOT NULL DEFAULT 0 CHECK (profile_tokens >= 0),
+    task_tokens INTEGER NOT NULL DEFAULT 0 CHECK (task_tokens >= 0),
     long_term_tokens INTEGER NOT NULL CHECK (long_term_tokens >= 0),
     working_tokens INTEGER NOT NULL CHECK (working_tokens >= 0),
     short_term_tokens INTEGER NOT NULL CHECK (short_term_tokens >= 0),
@@ -110,6 +111,68 @@ const SCHEMA = `
     router_prompt_tokens INTEGER CHECK (router_prompt_tokens >= 0),
     router_completion_tokens INTEGER CHECK (router_completion_tokens >= 0),
     router_cost_micros_usd INTEGER CHECK (router_cost_micros_usd >= 0),
+    created_at TEXT NOT NULL
+  ) STRICT;
+
+  CREATE TABLE IF NOT EXISTS task_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES memory_profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    goal TEXT,
+    stage TEXT NOT NULL CHECK (
+      stage IN ('planning', 'execution', 'validation', 'done', 'blocked', 'cancelled')
+    ),
+    paused INTEGER NOT NULL CHECK (paused IN (0, 1)),
+    expected_actor TEXT NOT NULL CHECK (expected_actor IN ('agent', 'user')),
+    expected_action TEXT NOT NULL,
+    blocked_from TEXT CHECK (
+      blocked_from IN ('planning', 'execution', 'validation')
+    ),
+    blocked_reason TEXT,
+    current_step_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  ) STRICT;
+
+  CREATE UNIQUE INDEX IF NOT EXISTS task_runs_live
+    ON task_runs(profile_id)
+    WHERE stage IN ('planning', 'execution', 'validation', 'blocked');
+
+  CREATE TABLE IF NOT EXISTS task_steps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL CHECK (position > 0),
+    title TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'done', 'skipped')),
+    result TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (run_id, position)
+  ) STRICT;
+
+  CREATE TABLE IF NOT EXISTS task_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL
+      CHECK (kind IN ('transition', 'step', 'pause', 'resume', 'rejected')),
+    origin TEXT NOT NULL CHECK (origin IN ('agent', 'user')),
+    from_stage TEXT,
+    to_stage TEXT,
+    reason TEXT,
+    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+    assistant_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+  ) STRICT;
+
+  CREATE INDEX IF NOT EXISTS task_events_run ON task_events(run_id, id);
+
+  CREATE TABLE IF NOT EXISTS task_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL UNIQUE
+      REFERENCES memory_profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    goal TEXT,
+    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL
   ) STRICT;
 `;
@@ -239,10 +302,17 @@ export function ensureMemorySchema(database: DatabaseSync): void {
       migrateWritesWithProfileLayer(database);
     }
 
-    if (!tableColumns(database, "memory_exchange_usage").includes("profile_tokens")) {
+    const usageColumns = tableColumns(database, "memory_exchange_usage");
+    if (!usageColumns.includes("profile_tokens")) {
       database.exec(
         `ALTER TABLE memory_exchange_usage
            ADD COLUMN profile_tokens INTEGER NOT NULL DEFAULT 0 CHECK (profile_tokens >= 0)`,
+      );
+    }
+    if (!usageColumns.includes("task_tokens")) {
+      database.exec(
+        `ALTER TABLE memory_exchange_usage
+           ADD COLUMN task_tokens INTEGER NOT NULL DEFAULT 0 CHECK (task_tokens >= 0)`,
       );
     }
 

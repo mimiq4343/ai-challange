@@ -8,6 +8,7 @@ import {
   countChatPrompt,
   countTextTokens,
 } from "../src/lib/token-counter";
+import { DEEPSEEK_FLASH_PROFILE } from "../src/lib/model-profiles";
 
 test("uses the checked-in DeepSeek tokenizer and chat template", async () => {
   assert.equal(await countTextTokens("Привет"), 2);
@@ -16,9 +17,9 @@ test("uses the checked-in DeepSeek tokenizer and chat template", async () => {
     historyTokens: 0,
     requestTokens: 4,
     promptTokens: 58,
-    reservedOutputTokens: 4_096,
-    contextTokens: 4_154,
-    contextLimit: 1_000_000,
+    reservedOutputTokens: DEEPSEEK_FLASH_PROFILE.responseReserveTokens,
+    contextTokens: 58 + DEEPSEEK_FLASH_PROFILE.responseReserveTokens,
+    contextLimit: DEEPSEEK_FLASH_PROFILE.contextWindow,
   });
 });
 

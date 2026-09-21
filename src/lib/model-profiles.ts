@@ -3,7 +3,12 @@ export const DEEPSEEK_FLASH_PROFILE = {
   tokenizer: "deepseek-v4",
   contextWindow: 1_000_000,
   maxOutputTokens: 393_216,
-  responseReserveTokens: 4_096,
+  /**
+   * Модель рассуждающая: reasoning_content списывается из того же лимита, что и
+   * ответ. При 4 096 токенов сложные запросы упирались в лимит на рассуждениях и
+   * возвращали пустой content с finish_reason = length.
+   */
+  responseReserveTokens: 16_384,
   pricing: {
     peak: {
       cacheHitInputPerMillion: 0.006,

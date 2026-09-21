@@ -24,10 +24,16 @@ import type {
   MemoryRouterResult,
   WorkingMemory,
 } from "./memory-types";
+import { FEATURES } from "./feature-flags";
 import { getProfileStore, type SqliteProfileStore } from "./profile-store";
+import { getTaskStore, type SqliteTaskStore } from "./task-store";
+import type { TaskProposal, TaskSnapshot } from "./task-types";
 import type { ProfileRouterWrite, UserProfile } from "./profile-types";
 import { calculateDeepSeekCost } from "./token-cost";
 import { assertContextFits, countTextTokens } from "./token-counter";
+
+const EMPTY_RESPONSE_MESSAGE =
+  "Модель израсходовала лимит ответа на рассуждения и не выдала текст. Повторите запрос или сформулируйте его короче.";
 
 type LlmResponder = {
   readonly model: string;
@@ -47,28 +53,45 @@ export type PersonalizedChatResponse = {
 
 export type PersonalizedMemorySnapshot = ConversationMemorySnapshot & {
   profile: UserProfile;
+  task: TaskSnapshot | null;
+  taskProposal: TaskProposal | null;
+};
+
+export type PersonalizedAgentOptions = {
+  /** Слой профиля Day 12; по умолчанию берётся из флага персонализации. */
+  personalization?: boolean;
+  /** Слой состояния задачи Day 13. */
+  taskState?: boolean;
 };
 
 export class PersonalizedChatAgent {
+  private readonly personalization: boolean;
+  private readonly taskStateEnabled: boolean;
+
   constructor(
     private readonly store: SqliteConversationStore,
     private readonly memory: SqliteMemoryStore,
     private readonly profiles: SqliteProfileStore,
+    private readonly tasks: SqliteTaskStore,
     private readonly llm: LlmResponder,
     private readonly router: MemoryRouterLlm | null,
-  ) {}
+    options: PersonalizedAgentOptions = {},
+  ) {
+    this.personalization = options.personalization ?? FEATURES.personalization;
+    this.taskStateEnabled = options.taskState ?? false;
+  }
 
   static fromEnvironment(
-    store: SqliteConversationStore = getConversationStore(),
-    memory: SqliteMemoryStore = getMemoryStore(),
-    profiles: SqliteProfileStore = getProfileStore(),
+    options: PersonalizedAgentOptions = {},
   ): PersonalizedChatAgent {
     return new PersonalizedChatAgent(
-      store,
-      memory,
-      profiles,
+      getConversationStore(),
+      getMemoryStore(),
+      getProfileStore(),
+      getTaskStore(),
       ChatAgent.fromEnvironment(),
       ProviderMemoryRouterLlm.fromEnvironment(),
+      options,
     );
   }
 
@@ -76,6 +99,8 @@ export class PersonalizedChatAgent {
     const profile = this.profiles.getActiveProfile();
     const messages = this.store.getMessages(conversationId);
     return {
+      task: this.taskStateEnabled ? this.tasks.getSnapshot(profile.id) : null,
+      taskProposal: this.taskStateEnabled ? this.tasks.getProposal(profile.id) : null,
       ...this.memory.getSnapshot(conversationId, profile.id, {
         windowMessages: SHORT_TERM_WINDOW_MESSAGES,
         totalMessages: messages.length,
@@ -97,12 +122,19 @@ export class PersonalizedChatAgent {
 
     const profile = this.profiles.getActiveProfile();
     const working = this.memory.getWorkingMemory(conversationId);
+    const task = this.taskStateEnabled ? this.tasks.getSnapshot(profile.id) : null;
+    const effectiveLayers: MemoryLayerToggles = {
+      ...layers,
+      profile: layers.profile && this.personalization,
+      task: layers.task && this.taskStateEnabled,
+    };
     const composed = await composeMemoryPrompt({
       messages: this.store.getMessages(conversationId),
       profile,
+      task,
       longTerm: this.memory.listLongTerm(profile.id),
       working,
-      layers,
+      layers: effectiveLayers,
     });
     const layerTokens = await countMemoryPromptTokens({ composed, request: content });
     assertContextFits({
@@ -139,12 +171,20 @@ export class PersonalizedChatAgent {
 
           const assistantContent = new TextDecoder().decode(completeResponse);
           if (assistantContent.length === 0) {
-            throw new ChatAgentError("API вернул пустой ответ.", "upstream");
+            const reason = (await response.finishReason) ?? "unknown";
+            throw new ChatAgentError(
+              reason === "length"
+                ? EMPTY_RESPONSE_MESSAGE
+                : `API вернул пустой ответ (finish_reason: ${reason}).`,
+              "upstream",
+            );
           }
 
           await this.persistExchange({
             conversationId,
             profile,
+            task,
+            layersApplied: effectiveLayers,
             request: content,
             assistantContent,
             layers,
@@ -168,6 +208,8 @@ export class PersonalizedChatAgent {
   private async persistExchange(input: {
     conversationId: string;
     profile: UserProfile;
+    task: TaskSnapshot | null;
+    layersApplied: MemoryLayerToggles;
     request: string;
     assistantContent: string;
     layers: MemoryLayerToggles;
@@ -193,7 +235,8 @@ export class PersonalizedChatAgent {
         input.layerTokens.shortTermTokens +
         input.layerTokens.longTermTokens +
         input.layerTokens.workingTokens +
-        input.layerTokens.profileTokens,
+        input.layerTokens.profileTokens +
+        input.layerTokens.taskTokens,
       requestTokens: input.layerTokens.requestTokens,
       promptTokens: input.layerTokens.promptTokens,
       reservedOutputTokens: input.layerTokens.reservedOutputTokens,
@@ -213,6 +256,7 @@ export class PersonalizedChatAgent {
     const routerResult = await this.route({
       conversationId: input.conversationId,
       profile: input.profile,
+      task: input.task,
       request: input.request,
       assistantContent: input.assistantContent,
       working: input.working,
@@ -220,7 +264,7 @@ export class PersonalizedChatAgent {
 
     this.memory.saveExchangeMemoryUsage(input.conversationId, assistantMessageId, {
       ...input.layerTokens,
-      layers: input.layers,
+      layers: input.layersApplied,
       shortTermMessages: input.shortTermMessages,
       router: routerResult?.cost ?? null,
     });
@@ -233,13 +277,33 @@ export class PersonalizedChatAgent {
       input.profile.id,
       routerResult,
     );
-    const profileWrites = routerResult.writes.filter(
-      (write): write is ProfileRouterWrite => write.layer === "profile",
-    );
-    this.profiles.applyProfileWrites(input.profile.id, profileWrites, {
-      conversationId: input.conversationId,
-      assistantMessageId,
-    });
+    if (this.personalization) {
+      const profileWrites = routerResult.writes.filter(
+        (write): write is ProfileRouterWrite => write.layer === "profile",
+      );
+      this.profiles.applyProfileWrites(input.profile.id, profileWrites, {
+        conversationId: input.conversationId,
+        assistantMessageId,
+      });
+    }
+
+    if (!this.taskStateEnabled) return;
+
+    if (input.task && routerResult.taskState) {
+      this.tasks.applyAgentUpdate(input.task.run.id, routerResult.taskState, {
+        conversationId: input.conversationId,
+        assistantMessageId,
+      });
+      return;
+    }
+
+    if (!input.task && routerResult.taskProposal) {
+      this.tasks.saveProposal(
+        input.profile.id,
+        routerResult.taskProposal,
+        input.conversationId,
+      );
+    }
   }
 
   /**
@@ -249,6 +313,7 @@ export class PersonalizedChatAgent {
   private async route(input: {
     conversationId: string;
     profile: UserProfile;
+    task: TaskSnapshot | null;
     request: string;
     assistantContent: string;
     working: WorkingMemory | null;
@@ -264,7 +329,9 @@ export class PersonalizedChatAgent {
         longTermKeys: this.memory
           .listLongTerm(input.profile.id)
           .map((entry) => entry.key),
-        profile: input.profile,
+        profile: this.personalization ? input.profile : null,
+        task: input.task,
+        taskEnabled: this.taskStateEnabled,
       });
     } catch (error) {
       console.error(

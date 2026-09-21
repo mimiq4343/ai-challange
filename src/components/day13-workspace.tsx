@@ -12,11 +12,7 @@ import {
   MemoryTelemetryBar,
   type MemoryTelemetrySource,
 } from "@/components/memory-telemetry-bar";
-import { ProfilePanel } from "@/components/profile-panel";
-import {
-  FEATURES,
-  PERSONALIZATION_DISABLED_MESSAGE,
-} from "@/lib/feature-flags";
+import { TaskStatePanel } from "@/components/task-state-panel";
 import type {
   ConversationDetail,
   ConversationSummary,
@@ -30,13 +26,19 @@ import {
   type MemoryLayerToggles,
   type WorkingSlotKind,
 } from "@/lib/memory-types";
-import type { ProfileEnumField, UserProfile } from "@/lib/profile-types";
+import type { TaskStage } from "@/lib/task-machine";
+import type {
+  TaskProposal,
+  TaskSnapshot,
+  TaskStepStatus,
+} from "@/lib/task-types";
 
-type Day12WorkspaceProps = {
+type Day13WorkspaceProps = {
   initialConversations: ConversationSummary[];
   initialDetail: ConversationDetail | null;
   initialMemory: ConversationMemorySnapshot | null;
-  initialProfiles: UserProfile[];
+  initialTask: TaskSnapshot | null;
+  initialProposal: TaskProposal | null;
   initialTotalCostMicrosUsd: number;
   shortTermWindow: number;
   model: string | null;
@@ -45,6 +47,7 @@ type Day12WorkspaceProps = {
 const MEMORY_HEADERS = {
   systemTokens: "X-Token-System",
   profileTokens: "X-Memory-Prof",
+  taskTokens: "X-Memory-Task",
   longTermTokens: "X-Memory-Ltm",
   workingTokens: "X-Memory-Wm",
   shortTermTokens: "X-Memory-Stm",
@@ -77,19 +80,21 @@ async function readJson<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export function Day12Workspace({
+export function Day13Workspace({
   initialConversations,
   initialDetail,
   initialMemory,
-  initialProfiles,
+  initialTask,
+  initialProposal,
   initialTotalCostMicrosUsd,
   shortTermWindow,
   model,
-}: Day12WorkspaceProps) {
+}: Day13WorkspaceProps) {
   const [layers, setLayers] = useState<MemoryLayerToggles>(
     ALL_MEMORY_LAYERS_ENABLED,
   );
-  const [profiles, setProfiles] = useState(initialProfiles);
+  const [task, setTask] = useState(initialTask);
+  const [proposal, setProposal] = useState(initialProposal);
   const [snapshot, setSnapshot] = useState(initialMemory);
   const [totalCost, setTotalCost] = useState(initialTotalCostMicrosUsd);
   const [preview, setPreview] = useState<MemoryLayerTokens | null>(null);
@@ -102,8 +107,6 @@ export function Day12Workspace({
   const sheetRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const activeProfile = profiles.find((profile) => profile.active) ?? null;
-
   useEffect(() => {
     if (!inspectorOpen) return;
     const sheet = sheetRef.current;
@@ -111,16 +114,18 @@ export function Day12Workspace({
     sheet?.querySelector<HTMLElement>("[data-mobile-sheet-close]")?.focus();
   }, [inspectorOpen]);
 
-  async function reloadProfiles(): Promise<void> {
-    const result = await readJson<{ profiles: UserProfile[] }>(
-      await fetch("/api/profiles", { cache: "no-store" }),
-    );
-    setProfiles(result.profiles);
+  async function reloadTask(): Promise<void> {
+    const result = await readJson<{
+      task: TaskSnapshot | null;
+      proposal: TaskProposal | null;
+    }>(await fetch("/api/tasks", { cache: "no-store" }));
+    setTask(result.task);
+    setProposal(result.proposal);
   }
 
   async function reload(conversationId: string | null): Promise<void> {
     try {
-      await reloadProfiles();
+      await reloadTask();
       if (!conversationId) {
         setSnapshot(null);
         setError(null);
@@ -249,102 +254,99 @@ export function Day12Workspace({
 
   const rail = (
     <>
-      {FEATURES.personalization ? (
-        <ProfilePanel
-          profiles={profiles}
-          activeProfile={activeProfile}
-          enabled={layers.profile}
-          busy={busy}
-          error={error}
-          profileTokens={telemetryTokens?.profileTokens ?? null}
-          onToggle={(enabled) =>
-            setLayers((current) => ({ ...current, profile: enabled }))
-          }
-          onActivate={(profileId: number) =>
-            mutate(
-              `/api/profiles/${profileId}/activate`,
-              { method: "POST" },
-              "Не удалось переключить профиль.",
-            )
-          }
-          onCreate={(name: string) =>
-            mutate(
-              "/api/profiles",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name }),
-              },
-              "Не удалось создать профиль.",
-            )
-          }
-          onDelete={(profileId: number) =>
-            mutate(
-              `/api/profiles/${profileId}`,
-              { method: "DELETE" },
-              "Не удалось удалить профиль.",
-            )
-          }
-          onUpdate={(
-            profileId: number,
-            patch: Partial<Record<ProfileEnumField | "role" | "name", string>>,
-          ) => {
-            const profile = profiles.find((item) => item.id === profileId);
-            if (!profile) return Promise.resolve();
-            return mutate(
-              `/api/profiles/${profileId}`,
-              {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  name: profile.name,
-                  role: profile.role ?? "",
-                  tone: profile.tone,
-                  verbosity: profile.verbosity,
-                  format: profile.format,
-                  language: profile.language,
-                  expertise: profile.expertise,
-                  ...patch,
-                }),
-              },
-              "Не удалось обновить профиль.",
-            );
-          }}
-          onAddConstraint={(profileId: number, value: string) =>
-            mutate(
-              `/api/profiles/${profileId}/constraints`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ value }),
-              },
-              "Не удалось добавить ограничение.",
-            )
-          }
-          onDeleteConstraint={(profileId: number, constraintId: number) =>
-            mutate(
-              `/api/profiles/${profileId}/constraints/${constraintId}`,
-              { method: "DELETE" },
-              "Не удалось удалить ограничение.",
-            )
-          }
-        />
-      ) : (
-        <section className="border-b border-line px-4 py-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
-            User profile
-          </p>
-          <h2 className="mt-1 text-base font-semibold tracking-tight">
-            Персонализация выключена
-          </h2>
-          <p className="mt-2 text-[11px] leading-relaxed text-muted">
-            {PERSONALIZATION_DISABLED_MESSAGE} Код и данные профилей сохранены:
-            чтобы вернуть панель, блок профиля в промпте и автоучёт
-            предпочтений, поставьте флагу значение{" "}
-            <code className="font-mono text-foreground">true</code>.
-          </p>
-        </section>
-      )}
+      <TaskStatePanel
+        task={task}
+        proposal={proposal}
+        enabled={layers.task}
+        busy={busy}
+        error={error}
+        taskTokens={telemetryTokens?.taskTokens ?? null}
+        onToggle={(enabled) =>
+          setLayers((current) => ({ ...current, task: enabled }))
+        }
+        onCreate={(title: string, goal: string) =>
+          mutate(
+            "/api/tasks",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title, goal }),
+            },
+            "Не удалось создать задачу.",
+          )
+        }
+        onAcceptProposal={() =>
+          mutate(
+            "/api/tasks/proposal",
+            { method: "POST" },
+            "Не удалось завести задачу из предложения.",
+          )
+        }
+        onRejectProposal={() =>
+          mutate(
+            "/api/tasks/proposal",
+            { method: "DELETE" },
+            "Не удалось отклонить предложение.",
+          )
+        }
+        onTransition={(stage: TaskStage, reason: string) =>
+          task
+            ? mutate(
+                `/api/tasks/${task.run.id}/transition`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ stage, reason }),
+                },
+                "Не удалось сменить этап.",
+              )
+            : Promise.resolve()
+        }
+        onPause={(paused: boolean) =>
+          task
+            ? mutate(
+                `/api/tasks/${task.run.id}/${paused ? "pause" : "resume"}`,
+                { method: "POST" },
+                "Не удалось изменить паузу.",
+              )
+            : Promise.resolve()
+        }
+        onAddStep={(title: string) =>
+          task
+            ? mutate(
+                `/api/tasks/${task.run.id}/steps`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ title }),
+                },
+                "Не удалось добавить шаг.",
+              )
+            : Promise.resolve()
+        }
+        onUpdateStep={(stepId: number, status: TaskStepStatus) =>
+          task
+            ? mutate(
+                `/api/tasks/${task.run.id}/steps/${stepId}`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ status }),
+                },
+                "Не удалось обновить шаг.",
+              )
+            : Promise.resolve()
+        }
+        onDeleteStep={(stepId: number) =>
+          task
+            ? mutate(
+                `/api/tasks/${task.run.id}/steps/${stepId}`,
+                { method: "DELETE" },
+                "Не удалось удалить шаг.",
+              )
+            : Promise.resolve()
+        }
+      />
       <MemoryInspector
         snapshot={snapshot}
         layers={layers}
@@ -430,7 +432,7 @@ export function Day12Workspace({
           initialDetail={initialDetail}
           model={model}
           events={events}
-          messageRoute="personalized-messages"
+          messageRoute="task-messages"
           requestBodyExtra={{ layers }}
           inputFooter={
             <MemoryTelemetryBar
@@ -459,7 +461,7 @@ export function Day12Workspace({
 
       <aside
         ref={sheetRef}
-        aria-label="Профиль и память"
+        aria-label="Задача и память"
         aria-modal={inspectorOpen || undefined}
         role={inspectorOpen ? "dialog" : undefined}
         onKeyDown={handleSheetKeyDown}
@@ -484,7 +486,7 @@ export function Day12Workspace({
       <button
         ref={triggerRef}
         type="button"
-        aria-label="Открыть профиль и память"
+        aria-label="Открыть задачу и память"
         aria-expanded={inspectorOpen}
         onClick={() => setInspectorOpen(true)}
         className="absolute right-3 top-2 flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-accent/25 bg-surface text-accent shadow-lg transition-colors hover:bg-accent/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent xl:hidden"

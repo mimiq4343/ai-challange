@@ -34,7 +34,7 @@ export const CHAT_SYSTEM_PROMPT = `Ты Flash — универсальный AI-
 Учитывай предыдущие сообщения диалога и давай законченные ответы.`;
 
 type ProviderEvent = {
-  choices?: { delta?: { content?: unknown } }[];
+  choices?: { delta?: { content?: unknown }; finish_reason?: unknown }[];
   usage?: {
     prompt_tokens?: unknown;
     completion_tokens?: unknown;
@@ -91,6 +91,11 @@ export function sseToChatResponse(
   const encoder = new TextEncoder();
   let buffer = "";
   let finalUsage: ProviderTokenUsage | null = null;
+  let finishReason: string | null = null;
+  let resolveFinishReason: (reason: string | null) => void = () => undefined;
+  const finish = new Promise<string | null>((resolve) => {
+    resolveFinishReason = resolve;
+  });
   let resolveUsage: (usage: ProviderTokenUsage | null) => void = () => undefined;
   const usage = new Promise<ProviderTokenUsage | null>((resolve) => {
     resolveUsage = resolve;
@@ -111,6 +116,9 @@ export function sseToChatResponse(
     const parsedUsage = parseProviderUsage(event.usage);
     if (parsedUsage) finalUsage = parsedUsage;
 
+    const reason = event.choices?.[0]?.finish_reason;
+    if (typeof reason === "string") finishReason = reason;
+
     const delta = event.choices?.[0]?.delta?.content;
     if (typeof delta === "string" && delta.length > 0) {
       controller.enqueue(encoder.encode(delta));
@@ -129,11 +137,12 @@ export function sseToChatResponse(
         buffer += decoder.decode();
         if (buffer) processLine(buffer, controller);
         resolveUsage(finalUsage);
+        resolveFinishReason(finishReason);
       },
     }),
   );
 
-  return { stream, usage };
+  return { stream, usage, finishReason: finish };
 }
 
 export class ChatAgent {
