@@ -63,6 +63,8 @@ const TASK_RULES = `
 - completedSteps — номера шагов, которые в этом обмене действительно выполнены.
 - block — причина блокировки, если продолжать нельзя без внешнего действия; иначе null.
 - expectedActor = agent|user и expectedAction — кто и что делает дальше.
+- planApproved = true ставь только тогда, когда пользователь в этом обмене явно утвердил план («план утверждаю», «принято, начинаем»). Собственное мнение агента планом не утверждает.
+- Переход в execution возможен лишь после утверждения плана, в validation — когда все шаги закрыты, в done — только по решению пользователя. Не предлагай переход, если условие не выполнено.
 - Поле «Состояние задачи» в запросе показывает, заведён ли автомат. Если там написано «задача не заведена», taskState обязан быть null: двигать нечего.
 - В этом случае, когда запрос требует нескольких шагов работы (план, разбор, подготовка материалов), предложи задачу через taskProposal: {"title": "короткое название", "goal": "что считать результатом"}. Для однострочных вопросов и справок taskProposal = null.
 - Если задача заведена, taskProposal всегда null: вторая задача не создаётся.`;
@@ -255,18 +257,28 @@ function parseTaskState(value: unknown): TaskStateUpdate | null {
       : null;
   const expectedAction = normalizeText(candidate.expectedAction, MAX_VALUE_LENGTH);
   const block = normalizeText(candidate.block, MAX_VALUE_LENGTH);
+  const planApproved = candidate.planApproved === true;
 
   if (
     !transition &&
     completedSteps.length === 0 &&
     newSteps.length === 0 &&
     !expectedAction &&
-    !block
+    !block &&
+    !planApproved
   ) {
     return null;
   }
 
-  return { transition, completedSteps, newSteps, expectedActor, expectedAction, block };
+  return {
+    transition,
+    completedSteps,
+    newSteps,
+    expectedActor,
+    expectedAction,
+    block,
+    planApproved,
+  };
 }
 
 function parseInvariantProposals(value: unknown): InvariantInput[] {

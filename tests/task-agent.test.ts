@@ -96,6 +96,7 @@ test("the prompt carries stage, current step and expected action", async () => {
   tasks.addStep(run.id, "Собрать требования");
   tasks.addStep(run.id, "Спроектировать схему");
   tasks.addStep(run.id, "Обновить API");
+  tasks.approvePlan(run.id);
   tasks.transition({ runId: run.id, to: "execution", origin: "user", reason: null });
   tasks.updateStep({
     runId: run.id,
@@ -132,6 +133,82 @@ test("the prompt carries stage, current step and expected action", async () => {
   assert.match(taskBlock, /Осталось: 3\) Обновить API/);
   assert.match(taskBlock, /Ожидается: агент/);
   assert.ok(response.layerTokens.taskTokens > 0);
+
+  memory.close();
+  profiles.close();
+  tasks.close();
+  invariants.close();
+  store.close();
+});
+
+test("a rejected transition reaches the next prompt so the agent can explain it", async () => {
+  const { store, memory, profiles, tasks, invariants, profileId } =
+    await createEnvironment();
+  const conversation = store.createConversation();
+  const run = tasks.createRun(profileId, "Контроль перехода", null);
+  tasks.addStep(run.id, "Первый шаг");
+
+  const rejected = tasks.transition({
+    runId: run.id,
+    to: "execution",
+    origin: "agent",
+    reason: null,
+  });
+  assert.equal(rejected.applied, false);
+
+  const calls: RecordedCall[] = [];
+  const agent = new PersonalizedChatAgent(
+    store,
+    memory,
+    profiles,
+    tasks,
+    invariants,
+    stubLlm("Объясняю", calls),
+    null,
+    { personalization: false, taskState: true },
+  );
+  await drain(
+    (
+      await agent.respond(
+        conversation.id,
+        "Почему не начинаем?",
+        ALL_MEMORY_LAYERS_ENABLED,
+        new AbortController().signal,
+      )
+    ).stream,
+  );
+
+  const taskBlock = calls[0].options?.systemMessages?.[1] ?? "";
+  assert.match(taskBlock, /План: 1 шаг\(ов\), ещё не утверждён/);
+  assert.match(taskBlock, /Последняя попытка перехода отклонена: execution — План не утверждён/);
+  assert.match(taskBlock, /Объясни пользователю, чего не хватает/);
+
+  tasks.approvePlan(run.id);
+  const afterApproval: RecordedCall[] = [];
+  const secondAgent = new PersonalizedChatAgent(
+    store,
+    memory,
+    profiles,
+    tasks,
+    invariants,
+    stubLlm("Начинаю", afterApproval),
+    null,
+    { personalization: false, taskState: true },
+  );
+  await drain(
+    (
+      await secondAgent.respond(
+        conversation.id,
+        "Утверждаю план.",
+        ALL_MEMORY_LAYERS_ENABLED,
+        new AbortController().signal,
+      )
+    ).stream,
+  );
+
+  const secondBlock = afterApproval[0].options?.systemMessages?.[1] ?? "";
+  assert.match(secondBlock, /утверждён пользователем/);
+  assert.doesNotMatch(secondBlock, /Последняя попытка перехода отклонена/);
 
   memory.close();
   profiles.close();
@@ -186,7 +263,7 @@ test("the agent moves the machine, a paused task refuses it", async () => {
   const planningRouter = stubRouter(`{"task": null, "closeTask": false, "writes": [],
     "taskState": {"transition": "execution", "completedSteps": [],
       "newSteps": ["Собрать список", "Написать письмо"],
-      "expectedActor": "agent", "expectedAction": "выполнить первый шаг", "block": null}}`);
+      "expectedActor": "agent", "expectedAction": "выполнить первый шаг", "block": null, "planApproved": true}}`);
   const planningAgent = new PersonalizedChatAgent(
     store,
     memory,
@@ -224,7 +301,7 @@ test("the agent moves the machine, a paused task refuses it", async () => {
     stubLlm("Продолжаю", []),
     stubRouter(`{"task": null, "closeTask": false, "writes": [],
       "taskState": {"transition": "validation", "completedSteps": [1], "newSteps": [],
-        "expectedActor": "user", "expectedAction": "проверить", "block": null}}`),
+        "expectedActor": "user", "expectedAction": "проверить", "block": null, "planApproved": true}}`),
     { personalization: false, taskState: true },
   );
   await drain(

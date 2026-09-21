@@ -107,6 +107,83 @@ test("a blocked task returns only to the stage it left", () => {
   );
 });
 
+test("implementation needs a non-empty approved plan", () => {
+  const empty = checkTransition({
+    from: "planning",
+    to: "execution",
+    paused: false,
+    origin: "user",
+    context: { planApproved: false, totalSteps: 0, openSteps: 0 },
+  });
+  assert.equal(empty.allowed, false);
+  assert.match(empty.allowed ? "" : empty.reason, /Плана нет/);
+
+  const unapproved = checkTransition({
+    from: "planning",
+    to: "execution",
+    paused: false,
+    origin: "agent",
+    context: { planApproved: false, totalSteps: 3, openSteps: 3 },
+  });
+  assert.equal(unapproved.allowed, false);
+  assert.match(unapproved.allowed ? "" : unapproved.reason, /не утверждён/);
+
+  assert.equal(
+    checkTransition({
+      from: "planning",
+      to: "execution",
+      paused: false,
+      origin: "agent",
+      context: { planApproved: true, totalSteps: 3, openSteps: 3 },
+    }).allowed,
+    true,
+  );
+});
+
+test("validation needs every step closed and the finish needs a human", () => {
+  const open = checkTransition({
+    from: "execution",
+    to: "validation",
+    paused: false,
+    origin: "agent",
+    context: { planApproved: true, totalSteps: 3, openSteps: 2 },
+  });
+  assert.equal(open.allowed, false);
+  assert.match(open.allowed ? "" : open.reason, /Осталось незакрытых шагов: 2/);
+
+  assert.equal(
+    checkTransition({
+      from: "execution",
+      to: "validation",
+      paused: false,
+      origin: "agent",
+      context: { planApproved: true, totalSteps: 3, openSteps: 0 },
+    }).allowed,
+    true,
+  );
+
+  const byAgent = checkTransition({
+    from: "validation",
+    to: "done",
+    paused: false,
+    origin: "agent",
+    context: { planApproved: true, totalSteps: 3, openSteps: 0 },
+  });
+  assert.equal(byAgent.allowed, false);
+  assert.match(byAgent.allowed ? "" : byAgent.reason, /Финал принимает человек/);
+
+  assert.equal(
+    checkTransition({
+      from: "validation",
+      to: "done",
+      paused: false,
+      origin: "user",
+      context: { planApproved: true, totalSteps: 3, openSteps: 0 },
+    }).allowed,
+    true,
+  );
+});
+
 test("every stage names who acts next", () => {
   assert.equal(defaultExpectation("execution").actor, "agent");
   assert.equal(defaultExpectation("validation").actor, "user");

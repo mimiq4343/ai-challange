@@ -74,6 +74,49 @@ export type TransitionCheck =
   | { allowed: false; reason: string };
 
 /**
+ * Состояние задачи, от которого зависят предусловия перехода. Передаётся
+ * аргументом, чтобы автомат оставался чистым.
+ */
+export type TransitionContext = {
+  planApproved: boolean;
+  totalSteps: number;
+  openSteps: number;
+};
+
+/**
+ * Предусловия жизненного цикла: смежности недостаточно. Реализация невозможна
+ * без утверждённого плана, проверка — с незакрытыми шагами, финал принимает
+ * только человек.
+ */
+function checkPrecondition(
+  from: TaskStage,
+  to: TaskStage,
+  origin: TaskActor,
+  context: TransitionContext | undefined,
+): string | null {
+  if (!context) return null;
+
+  if (from === "planning" && to === "execution") {
+    if (context.totalSteps === 0) {
+      return "Плана нет: сначала составьте шаги задачи.";
+    }
+    if (!context.planApproved) {
+      return "План не утверждён: реализация начинается после утверждения.";
+    }
+  }
+
+  if (from === "execution" && to === "validation" && context.openSteps > 0) {
+    return `Осталось незакрытых шагов: ${context.openSteps}. Проверка начинается после их завершения.`;
+  }
+
+  if (to === "done" && origin !== "user") {
+    return "Финал принимает человек: агент не закрывает задачу сам.";
+  }
+
+  return null;
+}
+
+/**
  * Проверяет переход автомата. Пауза сильнее таблицы переходов: пока задача
  * приостановлена, её может сдвинуть только человек.
  */
@@ -83,6 +126,7 @@ export function checkTransition(input: {
   paused: boolean;
   origin: TaskActor;
   blockedFrom?: TaskStage | null;
+  context?: TransitionContext;
 }): TransitionCheck {
   if (input.from === input.to) {
     return { allowed: false, reason: `Задача уже на этапе ${input.from}.` };
@@ -102,6 +146,9 @@ export function checkTransition(input: {
       reason: `Переход ${input.from} → ${input.to} не разрешён.`,
     };
   }
+  const precondition = checkPrecondition(input.from, input.to, input.origin, input.context);
+  if (precondition) return { allowed: false, reason: precondition };
+
   if (
     input.from === "blocked" &&
     input.to !== "cancelled" &&

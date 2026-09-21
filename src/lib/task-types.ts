@@ -15,6 +15,8 @@ export type TaskStep = {
 
 export type TaskEventKind =
   | "transition"
+  | "plan_approved"
+  | "plan_reset"
   | "step"
   | "pause"
   | "resume"
@@ -44,6 +46,10 @@ export type TaskRun = {
   blockedFrom: TaskStage | null;
   blockedReason: string | null;
   currentStepId: number | null;
+  planApproved: boolean;
+  planApprovedAt: string | null;
+  lastRejection: string | null;
+  lastRejectionAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -76,6 +82,7 @@ export type TaskStateUpdate = {
   expectedActor: TaskActor | null;
   expectedAction: string | null;
   block: string | null;
+  planApproved: boolean;
 };
 
 export type TaskUpdateOutcome = {

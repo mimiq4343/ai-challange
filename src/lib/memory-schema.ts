@@ -131,6 +131,10 @@ const SCHEMA = `
     ),
     blocked_reason TEXT,
     current_step_id INTEGER,
+    plan_approved INTEGER NOT NULL DEFAULT 0 CHECK (plan_approved IN (0, 1)),
+    plan_approved_at TEXT,
+    last_rejection TEXT,
+    last_rejection_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   ) STRICT;
@@ -154,8 +158,10 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS task_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id INTEGER NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL
-      CHECK (kind IN ('transition', 'step', 'pause', 'resume', 'rejected')),
+    kind TEXT NOT NULL CHECK (
+      kind IN ('transition', 'step', 'pause', 'resume', 'rejected', 'plan_approved',
+               'plan_reset')
+    ),
     origin TEXT NOT NULL CHECK (origin IN ('agent', 'user')),
     from_stage TEXT,
     to_stage TEXT,
@@ -300,6 +306,41 @@ function migrateWritesWithProfileLayer(database: DatabaseSync): void {
   `);
 }
 
+/** Расширяет журнал автомата событиями утверждения плана, сохраняя историю. */
+function migrateTaskEventsWithPlanKinds(database: DatabaseSync): void {
+  database.exec(`
+    ALTER TABLE task_events RENAME TO task_events_legacy;
+
+    CREATE TABLE task_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id INTEGER NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (
+        kind IN ('transition', 'step', 'pause', 'resume', 'rejected', 'plan_approved',
+                 'plan_reset')
+      ),
+      origin TEXT NOT NULL CHECK (origin IN ('agent', 'user')),
+      from_stage TEXT,
+      to_stage TEXT,
+      reason TEXT,
+      conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+      assistant_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    INSERT INTO task_events (
+      id, run_id, kind, origin, from_stage, to_stage, reason, conversation_id,
+      assistant_message_id, created_at
+    )
+    SELECT id, run_id, kind, origin, from_stage, to_stage, reason, conversation_id,
+           assistant_message_id, created_at
+    FROM task_events_legacy;
+
+    DROP TABLE task_events_legacy;
+
+    CREATE INDEX IF NOT EXISTS task_events_run ON task_events(run_id, id);
+  `);
+}
+
 /**
  * Создаёт схему памяти и выполняет идемпотентные миграции Day 11 → Day 12.
  * Вызывается каждым хранилищем памяти, поэтому безопасна при повторах.
@@ -363,6 +404,25 @@ export function ensureMemorySchema(database: DatabaseSync): void {
            ADD COLUMN task_tokens INTEGER NOT NULL DEFAULT 0 CHECK (task_tokens >= 0)`,
       );
     }
+    const runColumns = tableColumns(database, "task_runs");
+    for (const [column, definition] of [
+      ["plan_approved", "INTEGER NOT NULL DEFAULT 0 CHECK (plan_approved IN (0, 1))"],
+      ["plan_approved_at", "TEXT"],
+      ["last_rejection", "TEXT"],
+      ["last_rejection_at", "TEXT"],
+    ] as const) {
+      if (runColumns.length > 0 && !runColumns.includes(column)) {
+        database.exec(`ALTER TABLE task_runs ADD COLUMN ${column} ${definition}`);
+      }
+    }
+
+    const taskEventsSql = database
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'task_events'")
+      .get() as TableSqlRow | undefined;
+    if (taskEventsSql && !taskEventsSql.sql.includes("plan_approved")) {
+      migrateTaskEventsWithPlanKinds(database);
+    }
+
     if (!usageColumns.includes("invariant_tokens")) {
       database.exec(
         `ALTER TABLE memory_exchange_usage
