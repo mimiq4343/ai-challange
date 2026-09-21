@@ -22,6 +22,7 @@ corrections as short single-topic entries, written in English. Start from
 - [Day 10 · context strategies](superpowers/specs/2026-09-14-day-10-context-strategies-design.md)
 - [Day 11 · memory layers](superpowers/specs/2026-09-20-day-11-memory-layers-design.md)
 - [Day 12 · personalization](superpowers/specs/2026-09-20-day-12-personalization-design.md)
+- [Day 13 · task state machine](superpowers/specs/2026-09-21-day-13-task-state-machine-design.md)
 
 ## Superpowers plans
 
@@ -34,6 +35,7 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 - [Day 10 · context strategies](superpowers/plans/2026-09-14-day-10-context-strategies.md)
 - [Day 11 · memory layers](superpowers/plans/2026-09-20-day-11-memory-layers.md)
 - [Day 12 · personalization](superpowers/plans/2026-09-20-day-12-personalization.md)
+- [Day 13 · task state machine](superpowers/plans/2026-09-21-day-13-task-state-machine.md)
 
 ## Conventions
 

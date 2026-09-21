@@ -20,6 +20,7 @@ them against the current sources before relying on them.
 - [day-10.md](day-10.md) — Sliding Window, Sticky Facts and Branching strategies with their benchmark numbers.
 - [day-11.md](day-11.md) — three memory layers, the memory router, `memory_*` tables and the layer toggles.
 - [day-12.md](day-12.md) — user profiles, profile-scoped long term memory and automatic preference learning.
+- [day-13.md](day-13.md) — task state machine, the pause invariant and the personalization feature flag.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).
