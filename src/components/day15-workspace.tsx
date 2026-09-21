@@ -35,7 +35,7 @@ import type {
   TaskStepStatus,
 } from "@/lib/task-types";
 
-type Day14WorkspaceProps = {
+type Day15WorkspaceProps = {
   initialConversations: ConversationSummary[];
   initialDetail: ConversationDetail | null;
   initialMemory: ConversationMemorySnapshot | null;
@@ -84,7 +84,7 @@ async function readJson<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export function Day14Workspace({
+export function Day15Workspace({
   initialConversations,
   initialDetail,
   initialMemory,
@@ -94,7 +94,7 @@ export function Day14Workspace({
   initialTotalCostMicrosUsd,
   shortTermWindow,
   model,
-}: Day14WorkspaceProps) {
+}: Day15WorkspaceProps) {
   const [layers, setLayers] = useState<MemoryLayerToggles>(
     ALL_MEMORY_LAYERS_ENABLED,
   );

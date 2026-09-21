@@ -9,6 +9,7 @@ import {
   isTerminalStage,
   type TaskActor,
   type TaskStage,
+  type TransitionContext,
 } from "./task-machine";
 import type {
   TaskEvent,
@@ -37,6 +38,10 @@ type RunRow = {
   blocked_from: TaskStage | null;
   blocked_reason: string | null;
   current_step_id: number | null;
+  plan_approved: number;
+  plan_approved_at: string | null;
+  last_rejection: string | null;
+  last_rejection_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -105,6 +110,10 @@ function toRun(row: RunRow): TaskRun {
     blockedFrom: row.blocked_from,
     blockedReason: row.blocked_reason,
     currentStepId: row.current_step_id,
+    planApproved: row.plan_approved === 1,
+    planApprovedAt: row.plan_approved_at,
+    lastRejection: row.last_rejection,
+    lastRejectionAt: row.last_rejection_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -138,6 +147,8 @@ export class SqliteTaskStore {
   private readonly updateStepStatement: StatementSync;
   private readonly deleteStepStatement: StatementSync;
   private readonly insertEventStatement: StatementSync;
+  private readonly setPlanApprovedStatement: StatementSync;
+  private readonly setRejectionStatement: StatementSync;
   private readonly getProposalStatement: StatementSync;
   private readonly upsertProposalStatement: StatementSync;
   private readonly deleteProposalStatement: StatementSync;
@@ -150,7 +161,8 @@ export class SqliteTaskStore {
 
     const runColumns = `id, profile_id, title, goal, stage, paused, expected_actor,
                         expected_action, blocked_from, blocked_reason, current_step_id,
-                        created_at, updated_at`;
+                        plan_approved, plan_approved_at, last_rejection,
+                        last_rejection_at, created_at, updated_at`;
     this.getLiveRunStatement = this.database.prepare(`
       SELECT ${runColumns} FROM task_runs
       WHERE profile_id = ?
@@ -204,6 +216,17 @@ export class SqliteTaskStore {
     `);
     this.deleteStepStatement = this.database.prepare(`
       DELETE FROM task_steps WHERE id = ? AND run_id = ?
+    `);
+    this.setPlanApprovedStatement = this.database.prepare(`
+      UPDATE task_runs
+      SET plan_approved = ?, plan_approved_at = ?, updated_at = ?
+      WHERE id = ?
+      RETURNING ${runColumns}
+    `);
+    this.setRejectionStatement = this.database.prepare(`
+      UPDATE task_runs
+      SET last_rejection = ?, last_rejection_at = ?, updated_at = ?
+      WHERE id = ?
     `);
     this.insertEventStatement = this.database.prepare(`
       INSERT INTO task_events (
@@ -398,6 +421,7 @@ export class SqliteTaskStore {
       paused: run.paused,
       origin: input.origin,
       blockedFrom: run.blockedFrom,
+      context: this.transitionContext(run),
     });
 
     if (!check.allowed) {
@@ -409,6 +433,7 @@ export class SqliteTaskStore {
         reason: check.reason,
         journal,
       });
+      this.setRejection(run.id, `${input.to} — ${check.reason}`);
       return { applied: false, rejectedReason: check.reason, stage: run.stage };
     }
 
@@ -431,8 +456,73 @@ export class SqliteTaskStore {
       reason: input.reason,
       journal,
     });
+    this.setRejection(run.id, null);
 
     return { applied: true, rejectedReason: null, stage: input.to };
+  }
+
+  private transitionContext(run: TaskRun): TransitionContext {
+    const steps = this.listSteps(run.id);
+    return {
+      planApproved: run.planApproved,
+      totalSteps: steps.length,
+      openSteps: steps.filter(
+        (step) => step.status === "pending" || step.status === "active",
+      ).length,
+    };
+  }
+
+  private setRejection(runId: number, rejection: string | null): void {
+    const timestamp = new Date().toISOString();
+    this.setRejectionStatement.run(
+      rejection,
+      rejection ? timestamp : null,
+      timestamp,
+      runId,
+    );
+  }
+
+  /**
+   * Утверждение плана человеком. Через кнопку панели или через явную фразу в
+   * диалоге, которую распознал роутер.
+   */
+  approvePlan(runId: number, journal?: TaskJournalContext): TaskRun {
+    const run = this.getRun(runId);
+    if (!run) throw new TaskNotFoundError(runId);
+    if (this.listSteps(runId).length === 0) {
+      throw new TaskTransitionError("Плана нет: сначала составьте шаги задачи.");
+    }
+    if (run.planApproved) return run;
+
+    const timestamp = new Date().toISOString();
+    const row = this.setPlanApprovedStatement.get(1, timestamp, timestamp, runId) as RunRow;
+    this.recordEvent(runId, {
+      kind: "plan_approved",
+      origin: "user",
+      fromStage: run.stage,
+      toStage: run.stage,
+      reason: "план утверждён",
+      journal: journal ?? { conversationId: null, assistantMessageId: null },
+    });
+    this.setRejection(runId, null);
+
+    return toRun(row);
+  }
+
+  /** Правка плана снимает утверждение: иначе отметка перестаёт что-то значить. */
+  private resetPlanApproval(run: TaskRun, journal: TaskJournalContext): void {
+    if (!run.planApproved) return;
+
+    const timestamp = new Date().toISOString();
+    this.setPlanApprovedStatement.run(0, null, timestamp, run.id);
+    this.recordEvent(run.id, {
+      kind: "plan_reset",
+      origin: "user",
+      fromStage: run.stage,
+      toStage: run.stage,
+      reason: "план изменён, нужно утвердить заново",
+      journal,
+    });
   }
 
   setPaused(runId: number, paused: boolean, journal?: TaskJournalContext): TaskRun {
@@ -469,6 +559,7 @@ export class SqliteTaskStore {
     if (!run) throw new TaskNotFoundError(runId);
 
     const timestamp = new Date().toISOString();
+    this.resetPlanApproval(run, journal ?? { conversationId: null, assistantMessageId: null });
     const { position } = this.nextPositionStatement.get(runId) as { position: number };
     const hasActive = this.listSteps(runId).some((step) => step.status === "active");
     const row = this.insertStepStatement.get(
@@ -535,7 +626,12 @@ export class SqliteTaskStore {
   }
 
   deleteStep(runId: number, stepId: number): boolean {
-    return this.deleteStepStatement.run(stepId, runId).changes > 0;
+    const run = this.getRun(runId);
+    const removed = this.deleteStepStatement.run(stepId, runId).changes > 0;
+    if (removed && run) {
+      this.resetPlanApproval(run, { conversationId: null, assistantMessageId: null });
+    }
+    return removed;
   }
 
   /**
@@ -576,6 +672,7 @@ export class SqliteTaskStore {
 
       if (run.stage === "planning") {
         for (const title of update.newSteps) this.addStep(runId, title, journal);
+        if (update.planApproved) this.approvePlan(runId, journal);
       }
 
       for (const position of update.completedSteps) {

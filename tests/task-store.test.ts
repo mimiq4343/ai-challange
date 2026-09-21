@@ -67,8 +67,9 @@ test("steps move the pointer and record the plan", async () => {
 test("a paused task rejects agent updates and logs them", async () => {
   const { profiles, tasks, profileId } = await createStores();
   const run = tasks.createRun(profileId, "Пауза", null);
-  tasks.transition({ runId: run.id, to: "execution", origin: "user", reason: null });
   tasks.addStep(run.id, "Первый шаг");
+  tasks.approvePlan(run.id);
+  tasks.transition({ runId: run.id, to: "execution", origin: "user", reason: null });
   tasks.setPaused(run.id, true);
 
   const outcome = tasks.applyAgentUpdate(
@@ -80,6 +81,7 @@ test("a paused task rejects agent updates and logs them", async () => {
       expectedActor: null,
       expectedAction: null,
       block: null,
+      planApproved: false,
     },
     { conversationId: null, assistantMessageId: null },
   );
@@ -102,6 +104,7 @@ test("a paused task rejects agent updates and logs them", async () => {
       expectedActor: null,
       expectedAction: null,
       block: null,
+      planApproved: false,
     },
     { conversationId: null, assistantMessageId: null },
   );
@@ -126,6 +129,7 @@ test("the agent plans only while planning and blocking remembers the stage", asy
       expectedActor: "agent",
       expectedAction: "выполнить первый шаг",
       block: null,
+      planApproved: true,
     },
     { conversationId: null, assistantMessageId: null },
   );
@@ -142,6 +146,7 @@ test("the agent plans only while planning and blocking remembers the stage", asy
       expectedActor: null,
       expectedAction: null,
       block: "ждём доступ к базе",
+      planApproved: false,
     },
     { conversationId: null, assistantMessageId: null },
   );
@@ -181,6 +186,7 @@ test("proposing the current stage is a no-op, not a rejection", async () => {
       expectedActor: "user",
       expectedAction: "подтвердить план",
       block: null,
+      planApproved: false,
     },
     { conversationId: null, assistantMessageId: null },
   );
@@ -197,10 +203,111 @@ test("proposing the current stage is a no-op, not a rejection", async () => {
   profiles.close();
 });
 
+test("editing the plan drops its approval and the rejection is remembered", async () => {
+  const { profiles, tasks, profileId } = await createStores();
+  const run = tasks.createRun(profileId, "Контроль перехода", null);
+
+  const withoutPlan = tasks.transition({
+    runId: run.id,
+    to: "execution",
+    origin: "agent",
+    reason: null,
+  });
+  assert.equal(withoutPlan.applied, false);
+  assert.match(tasks.getRun(run.id)?.lastRejection ?? "", /Плана нет/);
+
+  tasks.addStep(run.id, "Первый шаг");
+  const unapproved = tasks.transition({
+    runId: run.id,
+    to: "execution",
+    origin: "agent",
+    reason: null,
+  });
+  assert.equal(unapproved.applied, false);
+  assert.match(tasks.getRun(run.id)?.lastRejection ?? "", /не утверждён/);
+
+  tasks.approvePlan(run.id);
+  assert.equal(tasks.getRun(run.id)?.planApproved, true);
+  assert.equal(tasks.getRun(run.id)?.lastRejection, null);
+
+  tasks.addStep(run.id, "Второй шаг");
+  assert.equal(tasks.getRun(run.id)?.planApproved, false);
+  assert.equal(
+    tasks.listEvents(run.id).some((event) => event.kind === "plan_reset"),
+    true,
+  );
+
+  tasks.approvePlan(run.id);
+  const moved = tasks.transition({
+    runId: run.id,
+    to: "execution",
+    origin: "agent",
+    reason: null,
+  });
+  assert.equal(moved.applied, true);
+  assert.equal(tasks.getRun(run.id)?.lastRejection, null);
+
+  tasks.close();
+  profiles.close();
+});
+
+test("the agent cannot skip validation or close the task itself", async () => {
+  const { profiles, tasks, profileId } = await createStores();
+  const run = tasks.createRun(profileId, "Полный цикл", null);
+  tasks.addStep(run.id, "Единственный шаг");
+  tasks.approvePlan(run.id);
+  tasks.transition({ runId: run.id, to: "execution", origin: "user", reason: null });
+
+  const early = tasks.transition({
+    runId: run.id,
+    to: "validation",
+    origin: "agent",
+    reason: null,
+  });
+  assert.equal(early.applied, false);
+  assert.match(early.rejectedReason ?? "", /Осталось незакрытых шагов: 1/);
+
+  tasks.updateStep({
+    runId: run.id,
+    stepId: tasks.listSteps(run.id)[0].id,
+    status: "done",
+    origin: "agent",
+  });
+  assert.equal(
+    tasks.transition({ runId: run.id, to: "validation", origin: "agent", reason: null })
+      .applied,
+    true,
+  );
+
+  const byAgent = tasks.transition({
+    runId: run.id,
+    to: "done",
+    origin: "agent",
+    reason: null,
+  });
+  assert.equal(byAgent.applied, false);
+  assert.match(byAgent.rejectedReason ?? "", /Финал принимает человек/);
+  assert.equal(
+    tasks.transition({ runId: run.id, to: "done", origin: "user", reason: null }).applied,
+    true,
+  );
+
+  tasks.close();
+  profiles.close();
+});
+
 test("finished tasks cannot be paused or moved", async () => {
   const { profiles, tasks, profileId } = await createStores();
   const run = tasks.createRun(profileId, "Финал", null);
+  tasks.addStep(run.id, "Единственный шаг");
+  tasks.approvePlan(run.id);
   tasks.transition({ runId: run.id, to: "execution", origin: "user", reason: null });
+  tasks.updateStep({
+    runId: run.id,
+    stepId: tasks.listSteps(run.id)[0].id,
+    status: "done",
+    origin: "user",
+  });
   tasks.transition({ runId: run.id, to: "validation", origin: "user", reason: null });
   tasks.transition({ runId: run.id, to: "done", origin: "user", reason: null });
 

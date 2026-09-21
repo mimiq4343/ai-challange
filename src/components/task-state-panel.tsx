@@ -12,6 +12,7 @@ import {
 
 import {
   allowedTransitions,
+  checkTransition,
   TASK_PIPELINE,
   TASK_STAGE_LABELS,
   type TaskStage,
@@ -45,6 +46,7 @@ export type TaskStatePanelProps = {
   taskTokens: number | null;
   onToggle: (enabled: boolean) => void;
   onCreate: (title: string, goal: string) => Promise<void>;
+  onApprovePlan: () => Promise<void>;
   onAcceptProposal: () => Promise<void>;
   onRejectProposal: () => Promise<void>;
   onTransition: (stage: TaskStage, reason: string) => Promise<void>;
@@ -63,6 +65,7 @@ export function TaskStatePanel({
   taskTokens,
   onToggle,
   onCreate,
+  onApprovePlan,
   onAcceptProposal,
   onRejectProposal,
   onTransition,
@@ -237,6 +240,37 @@ export function TaskStatePanel({
             )}
           </ol>
 
+          {task.run.lastRejection && (
+            <p
+              className="rounded-lg border border-rose-400/40 bg-rose-400/10 px-2 py-2 text-[11px] leading-relaxed text-rose-200"
+              role="status"
+            >
+              Переход отклонён: {task.run.lastRejection}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-2 py-1 font-mono text-[10px] ${
+                task.run.planApproved
+                  ? "border-emerald-400/40 text-emerald-200"
+                  : "border-line text-muted"
+              }`}
+            >
+              план {task.run.planApproved ? "утверждён" : "не утверждён"}
+            </span>
+            {!task.run.planApproved && task.steps.length > 0 && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onApprovePlan()}
+                className="min-h-11 cursor-pointer rounded-lg bg-accent-deep px-3 text-[11px] font-semibold text-white transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+              >
+                Утвердить план
+              </button>
+            )}
+          </div>
+
           <p className="rounded-lg border border-line bg-background/60 px-2 py-2 text-[11px] leading-relaxed">
             Ожидается:{" "}
             {task.run.expectedActor === "agent" ? "агент" : "пользователь"} —{" "}
@@ -262,20 +296,39 @@ export function TaskStatePanel({
               )}
               {task.run.paused ? "Продолжить" : "Пауза"}
             </button>
-            {allowedTransitions(task.run.stage).map((stage) => (
-              <button
-                key={stage}
-                type="button"
-                disabled={
-                  busy ||
-                  (stage === "blocked" && blockReason.trim().length === 0)
-                }
-                onClick={() => void submitTransition(stage)}
-                className="min-h-11 cursor-pointer rounded-lg border border-line px-3 text-[11px] transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
-              >
-                → {TASK_STAGE_LABELS[stage]}
-              </button>
-            ))}
+            {allowedTransitions(task.run.stage).map((stage) => {
+              const check = checkTransition({
+                from: task.run.stage,
+                to: stage,
+                paused: task.run.paused,
+                origin: "user",
+                blockedFrom: task.run.blockedFrom,
+                context: {
+                  planApproved: task.run.planApproved,
+                  totalSteps: task.steps.length,
+                  openSteps: task.steps.filter(
+                    (step) => step.status === "pending" || step.status === "active",
+                  ).length,
+                },
+              });
+              const blockedReason = check.allowed ? null : check.reason;
+              return (
+                <button
+                  key={stage}
+                  type="button"
+                  title={blockedReason ?? undefined}
+                  disabled={
+                    busy ||
+                    Boolean(blockedReason) ||
+                    (stage === "blocked" && blockReason.trim().length === 0)
+                  }
+                  onClick={() => void submitTransition(stage)}
+                  className="min-h-11 cursor-pointer rounded-lg border border-line px-3 text-[11px] transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+                >
+                  → {TASK_STAGE_LABELS[stage]}
+                </button>
+              );
+            })}
           </div>
 
           {allowedTransitions(task.run.stage).includes("blocked") && (

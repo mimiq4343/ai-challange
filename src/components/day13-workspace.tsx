@@ -264,6 +264,15 @@ export function Day13Workspace({
         onToggle={(enabled) =>
           setLayers((current) => ({ ...current, task: enabled }))
         }
+        onApprovePlan={() =>
+          task
+            ? mutate(
+                `/api/tasks/${task.run.id}/approve-plan`,
+                { method: "POST" },
+                "Не удалось утвердить план.",
+              )
+            : Promise.resolve()
+        }
         onCreate={(title: string, goal: string) =>
           mutate(
             "/api/tasks",

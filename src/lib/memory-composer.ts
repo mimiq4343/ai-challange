@@ -107,7 +107,17 @@ export function renderTaskBlock(snapshot: TaskSnapshot): string {
       `Осталось: ${pending.map((step) => `${step.position}) ${step.title}`).join("; ")}.`,
     );
   }
+  if (steps.length > 0) {
+    lines.push(
+      `План: ${steps.length} шаг(ов), ${run.planApproved ? "утверждён пользователем" : "ещё не утверждён"}.`,
+    );
+  }
   if (run.blockedReason) lines.push(`Причина блокировки: ${run.blockedReason}.`);
+  if (run.lastRejection) {
+    lines.push(
+      `Последняя попытка перехода отклонена: ${run.lastRejection}. Объясни пользователю, чего не хватает, и попроси недостающее действие.`,
+    );
+  }
   lines.push(
     `Ожидается: ${run.expectedActor === "agent" ? "агент" : "пользователь"} — ${run.expectedAction}.`,
   );
