@@ -1,6 +1,6 @@
 # Day 14: invariants
 
-- Branch `day-14` was created from `main` (days 1–13). Invariants belong to the
+- Branch `day-14` was created from `main` (days 1–13) and merged back on 2026-09-21. Invariants belong to the
   profile, live in `memory_invariants` and apply across every conversation and task.
 - Categories: `architecture`, `tech_decision`, `stack`, `business_rule`. A retired
   rule keeps its row (`status = 'retired'`) so the violation journal keeps its anchor.
