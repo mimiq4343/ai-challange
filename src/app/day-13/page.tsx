@@ -23,7 +23,9 @@ export default async function Day13() {
   const store = getConversationStore();
   const memory = getMemoryStore();
   const profile = getProfileStore().getActiveProfile();
-  const task = getTaskStore().getSnapshot(profile.id);
+  const taskStore = getTaskStore();
+  const task = taskStore.getSnapshot(profile.id);
+  const proposal = taskStore.getProposal(profile.id);
   const initialConversations = store.listConversations();
   const activeConversation = initialConversations[0] ?? null;
   const messages = activeConversation ? store.getMessages(activeConversation.id) : [];
@@ -70,6 +72,7 @@ export default async function Day13() {
               initialDetail={initialDetail}
               initialMemory={initialMemory}
               initialTask={task}
+              initialProposal={proposal}
               initialTotalCostMicrosUsd={analytics?.totals.costMicrosUsd ?? 0}
               shortTermWindow={SHORT_TERM_WINDOW_MESSAGES}
               model={process.env.OPENAI_MODEL ?? null}

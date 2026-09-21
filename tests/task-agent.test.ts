@@ -231,6 +231,147 @@ test("the agent moves the machine, a paused task refuses it", async () => {
   store.close();
 });
 
+test("a multi-step request becomes a proposal, not a task", async () => {
+  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const conversation = store.createConversation();
+
+  const calls: RecordedCall[] = [];
+  const agent = new PersonalizedChatAgent(
+    store,
+    memory,
+    profiles,
+    tasks,
+    stubLlm("Вот план питания", calls),
+    stubRouter(`{"task": null, "closeTask": false, "writes": [], "taskState": null,
+      "taskProposal": {"title": "План питания на неделю", "goal": "Меню на 7 дней"}}`),
+    { personalization: false, taskState: true },
+  );
+  await drain(
+    (
+      await agent.respond(
+        conversation.id,
+        "Составь план питания на неделю.",
+        ALL_MEMORY_LAYERS_ENABLED,
+        new AbortController().signal,
+      )
+    ).stream,
+  );
+
+  assert.equal(tasks.getLiveRun(profileId), null);
+  const proposal = tasks.getProposal(profileId);
+  assert.equal(proposal?.title, "План питания на неделю");
+  assert.equal(proposal?.goal, "Меню на 7 дней");
+  assert.equal(proposal?.conversationId, conversation.id);
+
+  const accepted = tasks.acceptProposal(profileId);
+  assert.equal(accepted?.stage, "planning");
+  assert.equal(tasks.getProposal(profileId), null);
+  assert.equal(tasks.acceptProposal(profileId), null);
+
+  memory.close();
+  profiles.close();
+  tasks.close();
+  store.close();
+});
+
+test("a live task ignores new proposals", async () => {
+  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const conversation = store.createConversation();
+  tasks.createRun(profileId, "Текущая задача", null);
+
+  const agent = new PersonalizedChatAgent(
+    store,
+    memory,
+    profiles,
+    tasks,
+    stubLlm("Ответ", []),
+    stubRouter(`{"task": null, "closeTask": false, "writes": [], "taskState": null,
+      "taskProposal": {"title": "Другая задача", "goal": null}}`),
+    { personalization: false, taskState: true },
+  );
+  await drain(
+    (
+      await agent.respond(
+        conversation.id,
+        "А ещё составь план питания.",
+        ALL_MEMORY_LAYERS_ENABLED,
+        new AbortController().signal,
+      )
+    ).stream,
+  );
+
+  assert.equal(tasks.getProposal(profileId), null);
+  assert.equal(tasks.getLiveRun(profileId)?.title, "Текущая задача");
+
+  memory.close();
+  profiles.close();
+  tasks.close();
+  store.close();
+});
+
+test("the task layer adds the stepwise rules to the system prompt", async () => {
+  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const conversation = store.createConversation();
+  const run = tasks.createRun(profileId, "Задача", null);
+  tasks.addStep(run.id, "Первый шаг");
+
+  const withTask: RecordedCall[] = [];
+  const withoutTask: RecordedCall[] = [];
+  const agentWithTask = new PersonalizedChatAgent(
+    store,
+    memory,
+    profiles,
+    tasks,
+    stubLlm("Готово", withTask),
+    null,
+    { personalization: false, taskState: true },
+  );
+  const agentWithoutTask = new PersonalizedChatAgent(
+    store,
+    memory,
+    profiles,
+    tasks,
+    stubLlm("Готово", withoutTask),
+    null,
+    { personalization: false, taskState: false },
+  );
+
+  await drain(
+    (
+      await agentWithTask.respond(
+        conversation.id,
+        "Продолжаем",
+        ALL_MEMORY_LAYERS_ENABLED,
+        new AbortController().signal,
+      )
+    ).stream,
+  );
+  await drain(
+    (
+      await agentWithoutTask.respond(
+        conversation.id,
+        "Просто вопрос",
+        ALL_MEMORY_LAYERS_ENABLED,
+        new AbortController().signal,
+      )
+    ).stream,
+  );
+
+  assert.match(
+    withTask[0].options?.systemMessages?.[0] ?? "",
+    /работай ровно над текущим шагом/i,
+  );
+  assert.doesNotMatch(
+    withoutTask[0].options?.systemMessages?.[0] ?? "",
+    /работай ровно над текущим шагом/i,
+  );
+
+  memory.close();
+  profiles.close();
+  tasks.close();
+  store.close();
+});
+
 test("disabled personalization keeps the profile out of the prompt and of the memory", async () => {
   const { store, memory, profiles, tasks, profileId } = await createEnvironment();
   const conversation = store.createConversation();

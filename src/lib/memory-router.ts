@@ -6,7 +6,7 @@ import {
   type UserProfile,
 } from "./profile-types";
 import { isTaskStage, TASK_STAGE_LABELS } from "./task-machine";
-import type { TaskSnapshot, TaskStateUpdate } from "./task-types";
+import type { TaskProposalInput, TaskSnapshot, TaskStateUpdate } from "./task-types";
 import type {
   LongTermKind,
   MemoryRouterResult,
@@ -45,10 +45,11 @@ const PROFILE_RULES = `
 const TASK_RULES = `
 - taskState описывает конечный автомат задачи. transition — один из planning|execution|validation|done|blocked|cancelled или null, если этап не меняется.
 - Разрешены только переходы planning→execution, execution→validation, validation→done, validation→execution, любой рабочий этап→blocked или cancelled, blocked→прежний этап.
-- newSteps заполняй только на этапе planning: это план задачи по шагам.
+- newSteps заполняй только на этапе planning: это план задачи по шагам. Если в ответе агента есть нумерованный или маркированный список шагов, обязательно перенеси его в newSteps короткими формулировками.
 - completedSteps — номера шагов, которые в этом обмене действительно выполнены.
 - block — причина блокировки, если продолжать нельзя без внешнего действия; иначе null.
-- expectedActor = agent|user и expectedAction — кто и что делает дальше.`;
+- expectedActor = agent|user и expectedAction — кто и что делает дальше.
+- Если живой задачи нет, а запрос требует нескольких шагов работы (план, разбор, подготовка материалов), предложи её через taskProposal: {"title": "короткое название", "goal": "что считать результатом"}. Для однострочных вопросов и справок taskProposal = null.`;
 
 /**
  * Системный промпт роутера собирается по включённым возможностям: выключенная
@@ -68,7 +69,7 @@ export function buildMemoryRouterSystemPrompt(options: {
       : []),
   ].join(", ");
   const taskShape = options.task
-    ? `, "taskState": {"transition": "planning|execution|validation|done|blocked|cancelled или null", "completedSteps": [1], "newSteps": ["строка"], "expectedActor": "agent|user", "expectedAction": "строка", "block": "строка или null"}`
+    ? `, "taskState": {"transition": "planning|execution|validation|done|blocked|cancelled или null", "completedSteps": [1], "newSteps": ["строка"], "expectedActor": "agent|user", "expectedAction": "строка", "block": "строка или null"}, "taskProposal": {"title": "строка", "goal": "строка или null"} | null`
     : "";
 
   return `Ты маршрутизатор памяти агента и не общаешься с пользователем.
@@ -248,6 +249,14 @@ function parseTaskState(value: unknown): TaskStateUpdate | null {
   return { transition, completedSteps, newSteps, expectedActor, expectedAction, block };
 }
 
+function parseTaskProposal(value: unknown): TaskProposalInput | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  const title = normalizeText(candidate.title, MAX_TITLE_LENGTH);
+  if (!title) return null;
+  return { title, goal: normalizeText(candidate.goal, MAX_VALUE_LENGTH) };
+}
+
 export function parseMemoryRouterResponse(raw: string): Omit<MemoryRouterResult, "cost"> {
   const parsed = parseJsonObject(raw);
   const rawWrites = Array.isArray(parsed.writes) ? parsed.writes : [];
@@ -268,6 +277,7 @@ export function parseMemoryRouterResponse(raw: string): Omit<MemoryRouterResult,
     closeTask: parsed.closeTask === true,
     writes,
     taskState: parseTaskState(parsed.taskState),
+    taskProposal: parseTaskProposal(parsed.taskProposal),
   };
 }
 
@@ -279,11 +289,13 @@ export async function runMemoryRouter(input: {
   longTermKeys: readonly string[];
   profile: UserProfile | null;
   task?: TaskSnapshot | null;
+  /** Слой задачи включён: правила автомата нужны и когда задачи ещё нет. */
+  taskEnabled?: boolean;
 }): Promise<MemoryRouterResult> {
   const completion = await input.llm.complete({
     systemPrompt: buildMemoryRouterSystemPrompt({
       personalization: FEATURES.personalization && input.profile !== null,
-      task: Boolean(input.task),
+      task: input.taskEnabled ?? Boolean(input.task),
     }),
     userPrompt: buildMemoryRouterPrompt(input),
     maxOutputTokens: ROUTER_OUTPUT_TOKENS,

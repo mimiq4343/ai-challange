@@ -165,6 +165,16 @@ const SCHEMA = `
   ) STRICT;
 
   CREATE INDEX IF NOT EXISTS task_events_run ON task_events(run_id, id);
+
+  CREATE TABLE IF NOT EXISTS task_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL UNIQUE
+      REFERENCES memory_profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    goal TEXT,
+    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+  ) STRICT;
 `;
 
 type ColumnRow = { name: string };

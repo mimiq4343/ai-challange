@@ -30,5 +30,20 @@
 - Live run on 2026-09-21: plan of four steps written in `planning`, first step closed
   with a transition to `execution`, a rejected agent transition during the pause, and
   a one-word «Продолжаем» in a fresh conversation produced the draft for step 2.
+- The task is not created by hand: the router returns `taskProposal` when the request
+  implies multi-step work, and the panel shows a confirm card. `task_proposals` keeps
+  one pending proposal per profile; a live run ignores new proposals.
+- Two bugs found by the user's «составь план питания на неделю» run:
+  1. The router only received the task rules when a task already existed
+     (`task: Boolean(input.task)`), so it could never propose one. Fixed with an
+     explicit `taskEnabled` flag.
+  2. The state block alone did not change behaviour — the agent dumped the whole
+     answer. `TASK_STEPWISE_RULES` now joins the base system prompt whenever the task
+     layer is on: a numbered 3–7 step plan while planning, one step per exchange in
+     execution.
+- A transition to the current stage is treated as a no-op instead of a `rejected`
+  event, otherwise the journal filled with noise.
+- In dev the store singletons live in `globalThis`, so adding a store method requires
+  restarting `next dev`; HMR keeps the old instance and the page 500s.
 - Permanent checks: `npm run test:tasks`, plus the memory, profile, token, compression
   and context-strategy suites.

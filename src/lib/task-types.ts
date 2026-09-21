@@ -48,10 +48,25 @@ export type TaskRun = {
   updatedAt: string;
 };
 
+export type TaskProposal = {
+  id: number;
+  profileId: number;
+  title: string;
+  goal: string | null;
+  conversationId: string | null;
+  createdAt: string;
+};
+
 export type TaskSnapshot = {
   run: TaskRun;
   steps: TaskStep[];
   events: TaskEvent[];
+};
+
+/** Предложение задачи от агента: ждёт подтверждения человеком. */
+export type TaskProposalInput = {
+  title: string;
+  goal: string | null;
 };
 
 export type TaskStateUpdate = {

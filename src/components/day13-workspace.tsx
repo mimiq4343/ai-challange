@@ -27,13 +27,18 @@ import {
   type WorkingSlotKind,
 } from "@/lib/memory-types";
 import type { TaskStage } from "@/lib/task-machine";
-import type { TaskSnapshot, TaskStepStatus } from "@/lib/task-types";
+import type {
+  TaskProposal,
+  TaskSnapshot,
+  TaskStepStatus,
+} from "@/lib/task-types";
 
 type Day13WorkspaceProps = {
   initialConversations: ConversationSummary[];
   initialDetail: ConversationDetail | null;
   initialMemory: ConversationMemorySnapshot | null;
   initialTask: TaskSnapshot | null;
+  initialProposal: TaskProposal | null;
   initialTotalCostMicrosUsd: number;
   shortTermWindow: number;
   model: string | null;
@@ -80,6 +85,7 @@ export function Day13Workspace({
   initialDetail,
   initialMemory,
   initialTask,
+  initialProposal,
   initialTotalCostMicrosUsd,
   shortTermWindow,
   model,
@@ -88,6 +94,7 @@ export function Day13Workspace({
     ALL_MEMORY_LAYERS_ENABLED,
   );
   const [task, setTask] = useState(initialTask);
+  const [proposal, setProposal] = useState(initialProposal);
   const [snapshot, setSnapshot] = useState(initialMemory);
   const [totalCost, setTotalCost] = useState(initialTotalCostMicrosUsd);
   const [preview, setPreview] = useState<MemoryLayerTokens | null>(null);
@@ -108,10 +115,12 @@ export function Day13Workspace({
   }, [inspectorOpen]);
 
   async function reloadTask(): Promise<void> {
-    const result = await readJson<{ task: TaskSnapshot | null }>(
-      await fetch("/api/tasks", { cache: "no-store" }),
-    );
+    const result = await readJson<{
+      task: TaskSnapshot | null;
+      proposal: TaskProposal | null;
+    }>(await fetch("/api/tasks", { cache: "no-store" }));
     setTask(result.task);
+    setProposal(result.proposal);
   }
 
   async function reload(conversationId: string | null): Promise<void> {
@@ -247,6 +256,7 @@ export function Day13Workspace({
     <>
       <TaskStatePanel
         task={task}
+        proposal={proposal}
         enabled={layers.task}
         busy={busy}
         error={error}
@@ -263,6 +273,20 @@ export function Day13Workspace({
               body: JSON.stringify({ title, goal }),
             },
             "Не удалось создать задачу.",
+          )
+        }
+        onAcceptProposal={() =>
+          mutate(
+            "/api/tasks/proposal",
+            { method: "POST" },
+            "Не удалось завести задачу из предложения.",
+          )
+        }
+        onRejectProposal={() =>
+          mutate(
+            "/api/tasks/proposal",
+            { method: "DELETE" },
+            "Не удалось отклонить предложение.",
           )
         }
         onTransition={(stage: TaskStage, reason: string) =>

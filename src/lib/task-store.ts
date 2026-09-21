@@ -12,6 +12,8 @@ import {
 } from "./task-machine";
 import type {
   TaskEvent,
+  TaskProposal,
+  TaskProposalInput,
   TaskEventKind,
   TaskRun,
   TaskSnapshot,
@@ -48,6 +50,15 @@ type StepRow = {
   result: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type ProposalRow = {
+  id: number;
+  profile_id: number;
+  title: string;
+  goal: string | null;
+  conversation_id: string | null;
+  created_at: string;
 };
 
 type EventRow = {
@@ -127,6 +138,9 @@ export class SqliteTaskStore {
   private readonly updateStepStatement: StatementSync;
   private readonly deleteStepStatement: StatementSync;
   private readonly insertEventStatement: StatementSync;
+  private readonly getProposalStatement: StatementSync;
+  private readonly upsertProposalStatement: StatementSync;
+  private readonly deleteProposalStatement: StatementSync;
   private readonly listEventsStatement: StatementSync;
 
   constructor(databasePath: string) {
@@ -197,6 +211,23 @@ export class SqliteTaskStore {
         assistant_message_id, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    this.getProposalStatement = this.database.prepare(`
+      SELECT id, profile_id, title, goal, conversation_id, created_at
+      FROM task_proposals WHERE profile_id = ?
+    `);
+    this.upsertProposalStatement = this.database.prepare(`
+      INSERT INTO task_proposals (profile_id, title, goal, conversation_id, created_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (profile_id) DO UPDATE SET
+        title = excluded.title,
+        goal = excluded.goal,
+        conversation_id = excluded.conversation_id,
+        created_at = excluded.created_at
+      RETURNING id, profile_id, title, goal, conversation_id, created_at
+    `);
+    this.deleteProposalStatement = this.database.prepare(`
+      DELETE FROM task_proposals WHERE profile_id = ?
+    `);
     this.listEventsStatement = this.database.prepare(`
       SELECT id, run_id, kind, origin, from_stage, to_stage, reason, conversation_id,
              created_at
@@ -235,6 +266,62 @@ export class SqliteTaskStore {
     }));
   }
 
+  getProposal(profileId: number): TaskProposal | null {
+    const row = this.getProposalStatement.get(profileId) as ProposalRow | undefined;
+    return row
+      ? {
+          id: row.id,
+          profileId: row.profile_id,
+          title: row.title,
+          goal: row.goal,
+          conversationId: row.conversation_id,
+          createdAt: row.created_at,
+        }
+      : null;
+  }
+
+  /**
+   * Сохраняет предложение агента. Пока живая задача есть, предложения не
+   * принимаются: автомат один, и заводит его человек.
+   */
+  saveProposal(
+    profileId: number,
+    input: TaskProposalInput,
+    conversationId: string | null,
+  ): TaskProposal | null {
+    if (this.getLiveRun(profileId)) return null;
+
+    const row = this.upsertProposalStatement.get(
+      profileId,
+      input.title,
+      input.goal,
+      conversationId,
+      new Date().toISOString(),
+    ) as ProposalRow;
+    return {
+      id: row.id,
+      profileId: row.profile_id,
+      title: row.title,
+      goal: row.goal,
+      conversationId: row.conversation_id,
+      createdAt: row.created_at,
+    };
+  }
+
+  discardProposal(profileId: number): boolean {
+    return this.deleteProposalStatement.run(profileId).changes > 0;
+  }
+
+  /** Превращает подтверждённое предложение в задачу на этапе планирования. */
+  acceptProposal(profileId: number): TaskRun | null {
+    const proposal = this.getProposal(profileId);
+    if (!proposal) return null;
+
+    const run = this.createRun(profileId, proposal.title, proposal.goal);
+    this.discardProposal(profileId);
+    return run;
+  }
+
   getSnapshot(profileId: number): TaskSnapshot | null {
     const run = this.getLiveRun(profileId);
     if (!run) return null;
@@ -242,6 +329,7 @@ export class SqliteTaskStore {
   }
 
   createRun(profileId: number, title: string, goal: string | null): TaskRun {
+    this.discardProposal(profileId);
     const timestamp = new Date().toISOString();
     const expectation = defaultExpectation("planning");
     const row = this.insertRunStatement.get(
@@ -502,6 +590,9 @@ export class SqliteTaskStore {
         });
       }
 
+      const requestedStage =
+        update.transition && update.transition !== run.stage ? update.transition : null;
+
       if (update.block) {
         outcome = this.transition({
           runId,
@@ -511,10 +602,10 @@ export class SqliteTaskStore {
           blockReason: update.block,
           journal,
         });
-      } else if (update.transition) {
+      } else if (requestedStage) {
         outcome = this.transition({
           runId,
-          to: update.transition,
+          to: requestedStage,
           origin: "agent",
           reason: "предложено агентом",
           journal,

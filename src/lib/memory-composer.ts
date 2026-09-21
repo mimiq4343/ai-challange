@@ -47,6 +47,18 @@ const LONG_TERM_HEADER =
 const WORKING_HEADER = "Рабочая память — состояние текущей задачи:";
 const TASK_HEADER = "Состояние задачи";
 
+/**
+ * Правила поведения для дня с конечным автоматом: без них состояние задачи
+ * остаётся справкой, а агент отвечает одним большим сообщением.
+ */
+export const TASK_STEPWISE_RULES = `Ты ведёшь работу по конечному автомату задачи и обязан держаться его состояния.
+На этапе планирования, если плана ещё нет, первым делом выдай нумерованный список из 3–7 шагов, по одной короткой строке на шаг, и только после списка задай уточняющие вопросы. Сами шаги на этом этапе не выполняй и не расписывай их содержимое.
+Если план уже есть, не переписывай его: назови текущий шаг и спроси подтверждение перехода к выполнению.
+На этапе выполнения работай ровно над текущим шагом, не забегая в следующие, и заканчивай ответ тем, что сделано и что требуется дальше.
+На этапе проверки предъяви результат к приёмке и перечисли, что осталось проверить.
+Если задача на паузе, отвечай на вопрос, но не продвигай работу дальше текущего шага.
+Согласованный план не пересказывай заново: он уже сохранён в состоянии.`;
+
 /** Собирает блок конечного автомата: этап, шаг и ожидаемое действие. */
 export function renderTaskBlock(snapshot: TaskSnapshot): string {
   const { run, steps } = snapshot;
@@ -63,6 +75,8 @@ export function renderTaskBlock(snapshot: TaskSnapshot): string {
   if (run.goal) lines.push(`Цель: ${run.goal}.`);
   if (current) {
     lines.push(`Шаг ${current.position} из ${steps.length}: «${current.title}».`);
+  } else if (run.stage === "planning") {
+    lines.push("Плана ещё нет: сначала предложи нумерованный список шагов.");
   }
   if (done.length > 0) {
     lines.push(
@@ -199,7 +213,7 @@ export async function composeMemoryPrompt(input: {
 
   return {
     systemMessages: [
-      CHAT_SYSTEM_PROMPT,
+      taskBlock ? `${CHAT_SYSTEM_PROMPT}\n\n${TASK_STEPWISE_RULES}` : CHAT_SYSTEM_PROMPT,
       profileBlock,
       taskBlock,
       longTermBlock,

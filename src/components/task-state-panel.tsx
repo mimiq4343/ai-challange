@@ -16,7 +16,11 @@ import {
   TASK_STAGE_LABELS,
   type TaskStage,
 } from "@/lib/task-machine";
-import type { TaskSnapshot, TaskStepStatus } from "@/lib/task-types";
+import type {
+  TaskProposal,
+  TaskSnapshot,
+  TaskStepStatus,
+} from "@/lib/task-types";
 
 const STEP_ICONS: Record<TaskStepStatus, string> = {
   pending: "text-muted",
@@ -34,12 +38,15 @@ const STEP_LABELS: Record<TaskStepStatus, string> = {
 
 export type TaskStatePanelProps = {
   task: TaskSnapshot | null;
+  proposal: TaskProposal | null;
   enabled: boolean;
   busy: boolean;
   error: string | null;
   taskTokens: number | null;
   onToggle: (enabled: boolean) => void;
   onCreate: (title: string, goal: string) => Promise<void>;
+  onAcceptProposal: () => Promise<void>;
+  onRejectProposal: () => Promise<void>;
   onTransition: (stage: TaskStage, reason: string) => Promise<void>;
   onPause: (paused: boolean) => Promise<void>;
   onAddStep: (title: string) => Promise<void>;
@@ -49,12 +56,15 @@ export type TaskStatePanelProps = {
 
 export function TaskStatePanel({
   task,
+  proposal,
   enabled,
   busy,
   error,
   taskTokens,
   onToggle,
   onCreate,
+  onAcceptProposal,
+  onRejectProposal,
   onTransition,
   onPause,
   onAddStep,
@@ -92,7 +102,9 @@ export function TaskStatePanel({
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
             Task state machine
           </p>
-          <h2 className="mt-1 text-base font-semibold tracking-tight">Состояние задачи</h2>
+          <h2 className="mt-1 text-base font-semibold tracking-tight">
+            Состояние задачи
+          </h2>
         </div>
         <button
           type="button"
@@ -125,9 +137,40 @@ export function TaskStatePanel({
 
       {!task ? (
         <div className="flex flex-col gap-2">
-          <p className="text-[11px] leading-relaxed text-muted">
-            Активной задачи нет. Заведите её — агент составит план на этапе планирования.
-          </p>
+          {proposal ? (
+            <div className="rounded-lg border border-accent/40 bg-accent/10 p-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
+                Агент предлагает задачу
+              </p>
+              <p className="mt-1 text-xs font-medium">{proposal.title}</p>
+              {proposal.goal && (
+                <p className="mt-0.5 text-[11px] text-muted">{proposal.goal}</p>
+              )}
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onAcceptProposal()}
+                  className="min-h-11 flex-1 cursor-pointer rounded-lg bg-accent-deep px-3 text-[11px] font-semibold text-white transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+                >
+                  Завести задачу
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onRejectProposal()}
+                  className="min-h-11 cursor-pointer rounded-lg border border-line px-3 text-[11px] text-muted transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
+                >
+                  Отклонить
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] leading-relaxed text-muted">
+              Активной задачи нет. Опишите многошаговую работу — агент предложит
+              задачу, либо заведите её вручную.
+            </p>
+          )}
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -163,7 +206,8 @@ export function TaskStatePanel({
           <ol className="flex flex-wrap items-center gap-1 text-[10px]">
             {TASK_PIPELINE.map((stage) => {
               const reached =
-                TASK_PIPELINE.indexOf(stage) <= TASK_PIPELINE.indexOf(task.run.stage);
+                TASK_PIPELINE.indexOf(stage) <=
+                TASK_PIPELINE.indexOf(task.run.stage);
               const current = stage === task.run.stage;
               return (
                 <li
@@ -180,7 +224,8 @@ export function TaskStatePanel({
                 </li>
               );
             })}
-            {(task.run.stage === "blocked" || task.run.stage === "cancelled") && (
+            {(task.run.stage === "blocked" ||
+              task.run.stage === "cancelled") && (
               <li className="rounded-full border border-amber-400/50 bg-amber-400/10 px-2 py-1 font-mono text-amber-200">
                 {TASK_STAGE_LABELS[task.run.stage]}
               </li>
@@ -193,7 +238,8 @@ export function TaskStatePanel({
           </ol>
 
           <p className="rounded-lg border border-line bg-background/60 px-2 py-2 text-[11px] leading-relaxed">
-            Ожидается: {task.run.expectedActor === "agent" ? "агент" : "пользователь"} —{" "}
+            Ожидается:{" "}
+            {task.run.expectedActor === "agent" ? "агент" : "пользователь"} —{" "}
             {task.run.expectedAction}
             {task.run.blockedReason && (
               <span className="mt-1 block text-amber-200">
@@ -220,7 +266,10 @@ export function TaskStatePanel({
               <button
                 key={stage}
                 type="button"
-                disabled={busy || (stage === "blocked" && blockReason.trim().length === 0)}
+                disabled={
+                  busy ||
+                  (stage === "blocked" && blockReason.trim().length === 0)
+                }
                 onClick={() => void submitTransition(stage)}
                 className="min-h-11 cursor-pointer rounded-lg border border-line px-3 text-[11px] transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
               >
@@ -257,7 +306,10 @@ export function TaskStatePanel({
                     disabled={busy}
                     aria-label={`Отметить шаг ${item.position} выполненным`}
                     onClick={() =>
-                      void onUpdateStep(item.id, item.status === "done" ? "pending" : "done")
+                      void onUpdateStep(
+                        item.id,
+                        item.status === "done" ? "pending" : "done",
+                      )
                     }
                     className={`flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg ${STEP_ICONS[item.status]} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40`}
                   >
@@ -268,7 +320,9 @@ export function TaskStatePanel({
                     )}
                   </button>
                   <span className="min-w-0 flex-1 break-words text-[11px] leading-relaxed">
-                    <span className="font-mono text-muted">{item.position}.</span>{" "}
+                    <span className="font-mono text-muted">
+                      {item.position}.
+                    </span>{" "}
                     {item.title}
                     <span className="mt-0.5 block font-mono text-[9px] text-muted">
                       {STEP_LABELS[item.status]}
@@ -316,13 +370,17 @@ export function TaskStatePanel({
                 </li>
               )}
               {task.events.map((event) => (
-                <li key={event.id} className="rounded-lg border border-line px-2 py-1.5">
+                <li
+                  key={event.id}
+                  className="rounded-lg border border-line px-2 py-1.5"
+                >
                   <p
                     className={`font-mono text-[10px] ${
                       event.kind === "rejected" ? "text-red-300" : "text-muted"
                     }`}
                   >
-                    {event.kind} · {event.origin === "agent" ? "агент" : "человек"}
+                    {event.kind} ·{" "}
+                    {event.origin === "agent" ? "агент" : "человек"}
                     {event.fromStage && event.toStage
                       ? ` · ${TASK_STAGE_LABELS[event.fromStage]} → ${TASK_STAGE_LABELS[event.toStage]}`
                       : ""}

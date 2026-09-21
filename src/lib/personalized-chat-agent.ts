@@ -27,7 +27,7 @@ import type {
 import { FEATURES } from "./feature-flags";
 import { getProfileStore, type SqliteProfileStore } from "./profile-store";
 import { getTaskStore, type SqliteTaskStore } from "./task-store";
-import type { TaskSnapshot } from "./task-types";
+import type { TaskProposal, TaskSnapshot } from "./task-types";
 import type { ProfileRouterWrite, UserProfile } from "./profile-types";
 import { calculateDeepSeekCost } from "./token-cost";
 import { assertContextFits, countTextTokens } from "./token-counter";
@@ -51,6 +51,7 @@ export type PersonalizedChatResponse = {
 export type PersonalizedMemorySnapshot = ConversationMemorySnapshot & {
   profile: UserProfile;
   task: TaskSnapshot | null;
+  taskProposal: TaskProposal | null;
 };
 
 export type PersonalizedAgentOptions = {
@@ -96,6 +97,7 @@ export class PersonalizedChatAgent {
     const messages = this.store.getMessages(conversationId);
     return {
       task: this.taskStateEnabled ? this.tasks.getSnapshot(profile.id) : null,
+      taskProposal: this.taskStateEnabled ? this.tasks.getProposal(profile.id) : null,
       ...this.memory.getSnapshot(conversationId, profile.id, {
         windowMessages: SHORT_TERM_WINDOW_MESSAGES,
         totalMessages: messages.length,
@@ -276,11 +278,22 @@ export class PersonalizedChatAgent {
       });
     }
 
-    if (this.taskStateEnabled && input.task && routerResult.taskState) {
+    if (!this.taskStateEnabled) return;
+
+    if (input.task && routerResult.taskState) {
       this.tasks.applyAgentUpdate(input.task.run.id, routerResult.taskState, {
         conversationId: input.conversationId,
         assistantMessageId,
       });
+      return;
+    }
+
+    if (!input.task && routerResult.taskProposal) {
+      this.tasks.saveProposal(
+        input.profile.id,
+        routerResult.taskProposal,
+        input.conversationId,
+      );
     }
   }
 
@@ -309,6 +322,7 @@ export class PersonalizedChatAgent {
           .map((entry) => entry.key),
         profile: this.personalization ? input.profile : null,
         task: input.task,
+        taskEnabled: this.taskStateEnabled,
       });
     } catch (error) {
       console.error(

@@ -168,6 +168,35 @@ test("the agent plans only while planning and blocking remembers the stage", asy
   profiles.close();
 });
 
+test("proposing the current stage is a no-op, not a rejection", async () => {
+  const { profiles, tasks, profileId } = await createStores();
+  const run = tasks.createRun(profileId, "Без перехода", null);
+
+  const outcome = tasks.applyAgentUpdate(
+    run.id,
+    {
+      transition: "planning",
+      completedSteps: [],
+      newSteps: ["Первый шаг"],
+      expectedActor: "user",
+      expectedAction: "подтвердить план",
+      block: null,
+    },
+    { conversationId: null, assistantMessageId: null },
+  );
+
+  assert.equal(outcome.stage, "planning");
+  assert.equal(tasks.listSteps(run.id).length, 1);
+  assert.equal(
+    tasks.listEvents(run.id).some((event) => event.kind === "rejected"),
+    false,
+  );
+  assert.equal(tasks.getRun(run.id)?.expectedAction, "подтвердить план");
+
+  tasks.close();
+  profiles.close();
+});
+
 test("finished tasks cannot be paused or moved", async () => {
   const { profiles, tasks, profileId } = await createStores();
   const run = tasks.createRun(profileId, "Финал", null);

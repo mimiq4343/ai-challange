@@ -1,5 +1,5 @@
 import type { ProfileRouterWrite } from "./profile-types";
-import type { TaskStateUpdate } from "./task-types";
+import type { TaskProposalInput, TaskStateUpdate } from "./task-types";
 
 export type MemoryLayer = "short_term" | "working" | "long_term" | "profile";
 
@@ -169,5 +169,6 @@ export type MemoryRouterResult = {
   closeTask: boolean;
   writes: MemoryRouterWrite[];
   taskState: TaskStateUpdate | null;
+  taskProposal: TaskProposalInput | null;
   cost: MemoryRouterCost | null;
 };

@@ -150,6 +150,7 @@ test("router result writes both layers once and journals every write", async () 
     ],
     cost: null,
     taskState: null,
+    taskProposal: null,
   });
 
   assert.equal(applied, 2);

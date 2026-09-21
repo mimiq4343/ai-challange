@@ -8,7 +8,11 @@ const MAX_GOAL_LENGTH = 400;
 
 export async function GET() {
   const profile = getProfileStore().getActiveProfile();
-  return Response.json({ task: getTaskStore().getSnapshot(profile.id) });
+  const store = getTaskStore();
+  return Response.json({
+    task: store.getSnapshot(profile.id),
+    proposal: store.getProposal(profile.id),
+  });
 }
 
 export async function POST(request: Request) {
@@ -42,5 +46,8 @@ export async function POST(request: Request) {
   }
 
   store.createRun(profile.id, title, rawGoal.length > 0 ? rawGoal : null);
-  return Response.json({ task: store.getSnapshot(profile.id) }, { status: 201 });
+  return Response.json(
+    { task: store.getSnapshot(profile.id), proposal: null },
+    { status: 201 },
+  );
 }
