@@ -21,6 +21,7 @@ them against the current sources before relying on them.
 - [day-11.md](day-11.md) — three memory layers, the memory router, `memory_*` tables and the layer toggles.
 - [day-12.md](day-12.md) — user profiles, profile-scoped long term memory and automatic preference learning.
 - [day-13.md](day-13.md) — task state machine, the pause invariant and the personalization feature flag.
+- [day-14.md](day-14.md) — project invariants, the pre-generation guard and the refusal contract.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).
