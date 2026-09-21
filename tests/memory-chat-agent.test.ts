@@ -21,6 +21,7 @@ const ALL_LAYERS: MemoryLayerToggles = {
   longTerm: true,
   profile: false,
   task: false,
+  invariants: false,
 };
 
 after(async () => {
@@ -179,7 +180,14 @@ test("disabled layers stay out of the prompt", async () => {
       await agent.respond(
         conversation.id,
         "Какой у меня цвет?",
-        { shortTerm: false, working: false, longTerm: false, profile: false, task: false },
+        {
+          shortTerm: false,
+          working: false,
+          longTerm: false,
+          profile: false,
+          task: false,
+          invariants: false,
+        },
         new AbortController().signal,
       )
     ).stream,
@@ -196,6 +204,7 @@ test("disabled layers stay out of the prompt", async () => {
     longTerm: false,
     profile: false,
     task: false,
+    invariants: false,
   });
 
   memory.close();

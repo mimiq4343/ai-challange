@@ -11,6 +11,7 @@ import type { MemoryRouterLlm } from "../src/lib/memory-router-llm";
 import { SqliteMemoryStore } from "../src/lib/memory-store";
 import { ALL_MEMORY_LAYERS_ENABLED } from "../src/lib/memory-types";
 import { PersonalizedChatAgent } from "../src/lib/personalized-chat-agent";
+import { SqliteInvariantStore } from "../src/lib/invariant-store";
 import { SqliteProfileStore } from "../src/lib/profile-store";
 import { SqliteTaskStore } from "../src/lib/task-store";
 
@@ -76,11 +77,12 @@ async function createEnvironment() {
   const memory = new SqliteMemoryStore(databasePath);
   const profiles = new SqliteProfileStore(databasePath);
   const tasks = new SqliteTaskStore(databasePath);
-  return { store, memory, profiles, tasks };
+  const invariants = new SqliteInvariantStore(databasePath);
+  return { store, memory, profiles, tasks, invariants };
 }
 
 test("active profile becomes the first system block of the prompt", async () => {
-  const { store, memory, profiles, tasks } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants } = await createEnvironment();
   const conversation = store.createConversation();
   const engineer = profiles.activateProfile(
     profiles.createProfile({
@@ -100,6 +102,7 @@ test("active profile becomes the first system block of the prompt", async () => 
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Готово", calls),
     null,
     { personalization: true },
@@ -132,11 +135,12 @@ test("active profile becomes the first system block of the prompt", async () => 
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("disabled profile layer costs nothing and leaves the prompt neutral", async () => {
-  const { store, memory, profiles, tasks } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants } = await createEnvironment();
   const conversation = store.createConversation();
   profiles.activateProfile(
     profiles.createProfile({ name: "Инженер", verbosity: "brief" }).id,
@@ -148,6 +152,7 @@ test("disabled profile layer costs nothing and leaves the prompt neutral", async
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Готово", calls),
     null,
     { personalization: true },
@@ -168,11 +173,12 @@ test("disabled profile layer costs nothing and leaves the prompt neutral", async
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("switching profiles switches both style and remembered facts", async () => {
-  const { store, memory, profiles, tasks } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants } = await createEnvironment();
   const conversation = store.createConversation();
   const base = profiles.getActiveProfile();
   memory.upsertLongTerm({
@@ -202,6 +208,7 @@ test("switching profiles switches both style and remembered facts", async () => 
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Ответ", calls),
     null,
     { personalization: true },
@@ -239,17 +246,19 @@ test("switching profiles switches both style and remembered facts", async () => 
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("router updates preferences and constraints automatically", async () => {
-  const { store, memory, profiles, tasks } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants } = await createEnvironment();
   const conversation = store.createConversation();
   const agent = new PersonalizedChatAgent(
     store,
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Хорошо", []),
     stubRouter(`{"task": null, "closeTask": false, "writes": [
       {"layer": "profile", "kind": "verbosity", "value": "brief", "reason": "просил короче"},
@@ -285,11 +294,12 @@ test("router updates preferences and constraints automatically", async () => {
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("a failing router keeps the exchange and the profile untouched", async () => {
-  const { store, memory, profiles, tasks } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants } = await createEnvironment();
   const conversation = store.createConversation();
   const failingRouter: MemoryRouterLlm = {
     model: "deepseek-v4-flash",
@@ -302,6 +312,7 @@ test("a failing router keeps the exchange and the profile untouched", async () =
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Ответ агента", []),
     failingRouter,
     { personalization: true },
@@ -328,5 +339,6 @@ test("a failing router keeps the exchange and the profile untouched", async () =
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });

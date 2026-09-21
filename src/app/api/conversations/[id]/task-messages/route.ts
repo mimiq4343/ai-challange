@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
 
 function parseLayers(value: unknown): MemoryLayerToggles | null {
-  if (value === undefined) return ALL_MEMORY_LAYERS_ENABLED;
+  if (value === undefined) return { ...ALL_MEMORY_LAYERS_ENABLED, invariants: false };
   if (typeof value !== "object" || value === null) return null;
 
   const candidate = value as Record<string, unknown>;
@@ -22,6 +22,7 @@ function parseLayers(value: unknown): MemoryLayerToggles | null {
     longTerm: candidate.longTerm as boolean,
     profile: candidate.profile as boolean,
     task: candidate.task as boolean,
+    invariants: false,
   };
 }
 

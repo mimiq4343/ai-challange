@@ -11,6 +11,7 @@ import type { MemoryRouterLlm } from "../src/lib/memory-router-llm";
 import { SqliteMemoryStore } from "../src/lib/memory-store";
 import { ALL_MEMORY_LAYERS_ENABLED } from "../src/lib/memory-types";
 import { PersonalizedChatAgent } from "../src/lib/personalized-chat-agent";
+import { SqliteInvariantStore } from "../src/lib/invariant-store";
 import { SqliteProfileStore } from "../src/lib/profile-store";
 import { SqliteTaskStore } from "../src/lib/task-store";
 
@@ -76,11 +77,20 @@ async function createEnvironment() {
   const memory = new SqliteMemoryStore(databasePath);
   const profiles = new SqliteProfileStore(databasePath);
   const tasks = new SqliteTaskStore(databasePath);
-  return { store, memory, profiles, tasks, profileId: profiles.getActiveProfile().id };
+  const invariants = new SqliteInvariantStore(databasePath);
+  return {
+    store,
+    memory,
+    profiles,
+    tasks,
+    invariants,
+    profileId: profiles.getActiveProfile().id,
+  };
 }
 
 test("the prompt carries stage, current step and expected action", async () => {
-  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants, profileId } =
+    await createEnvironment();
   const conversation = store.createConversation();
   const run = tasks.createRun(profileId, "Перенос памяти", "Разложить по слоям");
   tasks.addStep(run.id, "Собрать требования");
@@ -100,6 +110,7 @@ test("the prompt carries stage, current step and expected action", async () => {
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Готово", calls),
     null,
     { personalization: false, taskState: true },
@@ -125,11 +136,13 @@ test("the prompt carries stage, current step and expected action", async () => {
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("the disabled task layer costs nothing", async () => {
-  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants, profileId } =
+    await createEnvironment();
   const conversation = store.createConversation();
   const run = tasks.createRun(profileId, "Задача", null);
   tasks.addStep(run.id, "Первый шаг");
@@ -140,6 +153,7 @@ test("the disabled task layer costs nothing", async () => {
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Готово", calls),
     null,
     { personalization: false, taskState: true },
@@ -159,11 +173,13 @@ test("the disabled task layer costs nothing", async () => {
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("the agent moves the machine, a paused task refuses it", async () => {
-  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants, profileId } =
+    await createEnvironment();
   const conversation = store.createConversation();
   const run = tasks.createRun(profileId, "Рассылка", "Запустить рассылку");
 
@@ -176,6 +192,7 @@ test("the agent moves the machine, a paused task refuses it", async () => {
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("План готов", []),
     planningRouter,
     { personalization: false, taskState: true },
@@ -203,6 +220,7 @@ test("the agent moves the machine, a paused task refuses it", async () => {
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Продолжаю", []),
     stubRouter(`{"task": null, "closeTask": false, "writes": [],
       "taskState": {"transition": "validation", "completedSteps": [1], "newSteps": [],
@@ -228,11 +246,13 @@ test("the agent moves the machine, a paused task refuses it", async () => {
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("a multi-step request becomes a proposal, not a task", async () => {
-  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants, profileId } =
+    await createEnvironment();
   const conversation = store.createConversation();
 
   const calls: RecordedCall[] = [];
@@ -241,6 +261,7 @@ test("a multi-step request becomes a proposal, not a task", async () => {
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Вот план питания", calls),
     stubRouter(`{"task": null, "closeTask": false, "writes": [], "taskState": null,
       "taskProposal": {"title": "План питания на неделю", "goal": "Меню на 7 дней"}}`),
@@ -271,11 +292,13 @@ test("a multi-step request becomes a proposal, not a task", async () => {
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("a live task ignores new proposals", async () => {
-  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants, profileId } =
+    await createEnvironment();
   const conversation = store.createConversation();
   tasks.createRun(profileId, "Текущая задача", null);
 
@@ -284,6 +307,7 @@ test("a live task ignores new proposals", async () => {
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Ответ", []),
     stubRouter(`{"task": null, "closeTask": false, "writes": [], "taskState": null,
       "taskProposal": {"title": "Другая задача", "goal": null}}`),
@@ -306,11 +330,13 @@ test("a live task ignores new proposals", async () => {
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("the task layer adds the stepwise rules to the system prompt", async () => {
-  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants, profileId } =
+    await createEnvironment();
   const conversation = store.createConversation();
   const run = tasks.createRun(profileId, "Задача", null);
   tasks.addStep(run.id, "Первый шаг");
@@ -322,6 +348,7 @@ test("the task layer adds the stepwise rules to the system prompt", async () => 
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Готово", withTask),
     null,
     { personalization: false, taskState: true },
@@ -331,6 +358,7 @@ test("the task layer adds the stepwise rules to the system prompt", async () => 
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Готово", withoutTask),
     null,
     { personalization: false, taskState: false },
@@ -369,11 +397,13 @@ test("the task layer adds the stepwise rules to the system prompt", async () => 
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });
 
 test("disabled personalization keeps the profile out of the prompt and of the memory", async () => {
-  const { store, memory, profiles, tasks, profileId } = await createEnvironment();
+  const { store, memory, profiles, tasks, invariants, profileId } =
+    await createEnvironment();
   const conversation = store.createConversation();
   tasks.createRun(profileId, "Задача", null);
   profiles.updateProfile(profileId, { name: "Основной", verbosity: "brief" });
@@ -384,6 +414,7 @@ test("disabled personalization keeps the profile out of the prompt and of the me
     memory,
     profiles,
     tasks,
+    invariants,
     stubLlm("Ответ", calls),
     stubRouter(`{"task": null, "closeTask": false, "writes": [
       {"layer": "profile", "kind": "tone", "value": "direct", "reason": "мимо флага"}
@@ -409,5 +440,6 @@ test("disabled personalization keeps the profile out of the prompt and of the me
   memory.close();
   profiles.close();
   tasks.close();
+  invariants.close();
   store.close();
 });

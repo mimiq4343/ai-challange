@@ -25,6 +25,9 @@ import type {
   WorkingMemory,
 } from "./memory-types";
 import { FEATURES } from "./feature-flags";
+import { checkInvariants, renderRefusal } from "./invariant-guard";
+import { getInvariantStore, type SqliteInvariantStore } from "./invariant-store";
+import type { Invariant, InvariantSnapshot } from "./invariant-types";
 import { getProfileStore, type SqliteProfileStore } from "./profile-store";
 import { getTaskStore, type SqliteTaskStore } from "./task-store";
 import type { TaskProposal, TaskSnapshot } from "./task-types";
@@ -49,12 +52,15 @@ export type PersonalizedChatResponse = {
   layerTokens: MemoryLayerTokens;
   shortTermMessages: number;
   profile: UserProfile;
+  /** Идентификаторы инвариантов, из-за которых запрос был отклонён. */
+  blockedBy: number[];
 };
 
 export type PersonalizedMemorySnapshot = ConversationMemorySnapshot & {
   profile: UserProfile;
   task: TaskSnapshot | null;
   taskProposal: TaskProposal | null;
+  invariants: InvariantSnapshot | null;
 };
 
 export type PersonalizedAgentOptions = {
@@ -62,23 +68,28 @@ export type PersonalizedAgentOptions = {
   personalization?: boolean;
   /** Слой состояния задачи Day 13. */
   taskState?: boolean;
+  /** Слой инвариантов Day 14 вместе с предварительной проверкой запроса. */
+  invariants?: boolean;
 };
 
 export class PersonalizedChatAgent {
   private readonly personalization: boolean;
   private readonly taskStateEnabled: boolean;
+  private readonly invariantsEnabled: boolean;
 
   constructor(
     private readonly store: SqliteConversationStore,
     private readonly memory: SqliteMemoryStore,
     private readonly profiles: SqliteProfileStore,
     private readonly tasks: SqliteTaskStore,
+    private readonly invariantStore: SqliteInvariantStore,
     private readonly llm: LlmResponder,
     private readonly router: MemoryRouterLlm | null,
     options: PersonalizedAgentOptions = {},
   ) {
     this.personalization = options.personalization ?? FEATURES.personalization;
     this.taskStateEnabled = options.taskState ?? false;
+    this.invariantsEnabled = options.invariants ?? false;
   }
 
   static fromEnvironment(
@@ -89,6 +100,7 @@ export class PersonalizedChatAgent {
       getMemoryStore(),
       getProfileStore(),
       getTaskStore(),
+      getInvariantStore(),
       ChatAgent.fromEnvironment(),
       ProviderMemoryRouterLlm.fromEnvironment(),
       options,
@@ -101,6 +113,9 @@ export class PersonalizedChatAgent {
     return {
       task: this.taskStateEnabled ? this.tasks.getSnapshot(profile.id) : null,
       taskProposal: this.taskStateEnabled ? this.tasks.getProposal(profile.id) : null,
+      invariants: this.invariantsEnabled
+        ? this.invariantStore.getSnapshot(profile.id)
+        : null,
       ...this.memory.getSnapshot(conversationId, profile.id, {
         windowMessages: SHORT_TERM_WINDOW_MESSAGES,
         totalMessages: messages.length,
@@ -127,9 +142,14 @@ export class PersonalizedChatAgent {
       ...layers,
       profile: layers.profile && this.personalization,
       task: layers.task && this.taskStateEnabled,
+      invariants: layers.invariants && this.invariantsEnabled,
     };
+    const invariants: Invariant[] = effectiveLayers.invariants
+      ? this.invariantStore.listActive(profile.id)
+      : [];
     const composed = await composeMemoryPrompt({
       messages: this.store.getMessages(conversationId),
+      invariants,
       profile,
       task,
       longTerm: this.memory.listLongTerm(profile.id),
@@ -146,6 +166,45 @@ export class PersonalizedChatAgent {
       contextTokens: layerTokens.contextTokens,
       contextLimit: layerTokens.contextLimit,
     });
+
+    const verdict = await this.guard(content, invariants);
+    if (verdict?.verdict === "conflict") {
+      const refusal = renderRefusal(verdict, invariants);
+      this.invariantStore.recordViolation({
+        profileId: profile.id,
+        invariantIds: verdict.invariantIds,
+        request: content,
+        explanation: verdict.explanation,
+        conversationId,
+      });
+      await this.persistExchange({
+        conversationId,
+        profile,
+        task,
+        layersApplied: effectiveLayers,
+        request: content,
+        assistantContent: refusal,
+        layers,
+        layerTokens,
+        shortTermMessages: composed.shortTermMessages,
+        providerUsage: null,
+        working,
+        skipRouter: true,
+      });
+
+      return {
+        stream: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(refusal));
+            controller.close();
+          },
+        }),
+        layerTokens,
+        shortTermMessages: composed.shortTermMessages,
+        profile,
+        blockedBy: verdict.invariantIds,
+      };
+    }
 
     const response = await this.llm.respond(
       [...composed.history, { role: "user", content }],
@@ -202,7 +261,26 @@ export class PersonalizedChatAgent {
       layerTokens,
       shortTermMessages: composed.shortTermMessages,
       profile,
+      blockedBy: [],
     };
+  }
+
+  /**
+   * Предварительная проверка запроса. Сбой страховки не должен превращаться в
+   * отказ обслуживания, поэтому ошибка логируется и запрос идёт дальше.
+   */
+  private async guard(
+    request: string,
+    invariants: readonly Invariant[],
+  ): Promise<Awaited<ReturnType<typeof checkInvariants>> | null> {
+    if (!this.router || invariants.length === 0) return null;
+
+    try {
+      return await checkInvariants({ llm: this.router, request, invariants });
+    } catch (error) {
+      console.error("Проверка инвариантов не выполнена.", error);
+      return null;
+    }
   }
 
   private async persistExchange(input: {
@@ -210,6 +288,7 @@ export class PersonalizedChatAgent {
     profile: UserProfile;
     task: TaskSnapshot | null;
     layersApplied: MemoryLayerToggles;
+    skipRouter?: boolean;
     request: string;
     assistantContent: string;
     layers: MemoryLayerToggles;
@@ -253,6 +332,16 @@ export class PersonalizedChatAgent {
     const assistantMessageId = this.store.getMessages(input.conversationId).at(-1)?.id;
     if (assistantMessageId === undefined) return;
 
+    if (input.skipRouter) {
+      this.memory.saveExchangeMemoryUsage(input.conversationId, assistantMessageId, {
+        ...input.layerTokens,
+        layers: input.layersApplied,
+        shortTermMessages: input.shortTermMessages,
+        router: null,
+      });
+      return;
+    }
+
     const routerResult = await this.route({
       conversationId: input.conversationId,
       profile: input.profile,
@@ -285,6 +374,14 @@ export class PersonalizedChatAgent {
         conversationId: input.conversationId,
         assistantMessageId,
       });
+    }
+
+    if (this.invariantsEnabled && routerResult.invariantProposals.length > 0) {
+      this.invariantStore.saveProposals(
+        input.profile.id,
+        routerResult.invariantProposals,
+        input.conversationId,
+      );
     }
 
     if (!this.taskStateEnabled) return;
@@ -332,6 +429,7 @@ export class PersonalizedChatAgent {
         profile: this.personalization ? input.profile : null,
         task: input.task,
         taskEnabled: this.taskStateEnabled,
+        invariantsEnabled: this.invariantsEnabled,
       });
     } catch (error) {
       console.error(
