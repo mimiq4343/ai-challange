@@ -1,4 +1,5 @@
 import type { ProfileRouterWrite } from "./profile-types";
+import type { TaskStateUpdate } from "./task-types";
 
 export type MemoryLayer = "short_term" | "working" | "long_term" | "profile";
 
@@ -88,6 +89,7 @@ export type MemoryLayerToggles = {
   working: boolean;
   longTerm: boolean;
   profile: boolean;
+  task: boolean;
 };
 
 export const ALL_MEMORY_LAYERS_ENABLED: MemoryLayerToggles = {
@@ -95,11 +97,13 @@ export const ALL_MEMORY_LAYERS_ENABLED: MemoryLayerToggles = {
   working: true,
   longTerm: true,
   profile: true,
+  task: true,
 };
 
 export type MemoryLayerTokens = {
   systemTokens: number;
   profileTokens: number;
+  taskTokens: number;
   longTermTokens: number;
   workingTokens: number;
   shortTermTokens: number;
@@ -164,5 +168,6 @@ export type MemoryRouterResult = {
   task: WorkingTaskInput | null;
   closeTask: boolean;
   writes: MemoryRouterWrite[];
+  taskState: TaskStateUpdate | null;
   cost: MemoryRouterCost | null;
 };

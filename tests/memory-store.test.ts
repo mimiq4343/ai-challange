@@ -149,6 +149,7 @@ test("router result writes both layers once and journals every write", async () 
       { layer: "working", kind: "step", value: "Описать слои", reason: null },
     ],
     cost: null,
+    taskState: null,
   });
 
   assert.equal(applied, 2);
@@ -180,6 +181,7 @@ test("exchange memory usage round trips layer tokens and router cost", async () 
   memory.saveExchangeMemoryUsage(conversation.id, assistantMessageId, {
     systemTokens: 40,
     profileTokens: 0,
+    taskTokens: 0,
     longTermTokens: 120,
     workingTokens: 0,
     shortTermTokens: 300,
@@ -189,7 +191,13 @@ test("exchange memory usage round trips layer tokens and router cost", async () 
     contextTokens: 4_568,
     contextLimit: 1_000_000,
     shortTermMessages: 6,
-    layers: { shortTerm: true, working: false, longTerm: true, profile: false },
+    layers: {
+      shortTerm: true,
+      working: false,
+      longTerm: true,
+      profile: false,
+      task: false,
+    },
     router: { promptTokens: 220, completionTokens: 40, costMicrosUsd: 114 },
   });
 
@@ -202,6 +210,7 @@ test("exchange memory usage round trips layer tokens and router cost", async () 
     working: false,
     longTerm: true,
     profile: false,
+    task: false,
   });
   assert.equal(usage?.router?.costMicrosUsd, 114);
   assert.equal(usage?.contextTokens, 4_568);

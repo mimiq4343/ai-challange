@@ -1,4 +1,5 @@
 import { getProfileStore } from "@/lib/profile-store";
+import { FEATURES, PERSONALIZATION_DISABLED_MESSAGE } from "@/lib/feature-flags";
 import {
   isPreferenceValue,
   PROFILE_FIELD_VALUES,
@@ -44,6 +45,10 @@ export function parseProfileBody(
 }
 
 export async function GET() {
+  if (!FEATURES.personalization) {
+    return Response.json({ error: PERSONALIZATION_DISABLED_MESSAGE }, { status: 404 });
+  }
+
   const store = getProfileStore();
   return Response.json({
     profiles: store.listProfiles(),
@@ -52,6 +57,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!FEATURES.personalization) {
+    return Response.json({ error: PERSONALIZATION_DISABLED_MESSAGE }, { status: 404 });
+  }
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

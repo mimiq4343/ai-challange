@@ -1,9 +1,12 @@
 import type { MemoryRouterLlm } from "./memory-router-llm";
+import { FEATURES } from "./feature-flags";
 import {
   isPreferenceValue,
   PROFILE_FIELD_VALUES,
   type UserProfile,
 } from "./profile-types";
+import { isTaskStage, TASK_STAGE_LABELS } from "./task-machine";
+import type { TaskSnapshot, TaskStateUpdate } from "./task-types";
 import type {
   LongTermKind,
   MemoryRouterResult,
@@ -14,11 +17,13 @@ import type {
 import { calculateDeepSeekCost } from "./token-cost";
 
 const MAX_WRITES = 6;
+const MAX_STEPS = 8;
 const MAX_KEY_LENGTH = 64;
 const MAX_VALUE_LENGTH = 400;
 const MAX_TITLE_LENGTH = 80;
 const MAX_EXCERPT_LENGTH = 2_000;
-const ROUTER_OUTPUT_TOKENS = 512;
+/** Контракт роутера вырос до трёх слоёв и плана задачи: 512 токенов обрезали JSON. */
+const ROUTER_OUTPUT_TOKENS = 1_024;
 
 const LONG_TERM_KINDS: Record<LongTermKind, true> = {
   profile: true,
@@ -33,15 +38,48 @@ const WORKING_KINDS: Record<WorkingSlotKind, true> = {
   open_question: true,
 };
 
-export const MEMORY_ROUTER_SYSTEM_PROMPT = `Ты маршрутизатор памяти агента и не общаешься с пользователем.
+const PROFILE_RULES = `
+- profile — то, КАК пользователь просит с ним разговаривать. Допустимые значения: tone = neutral|friendly|formal|direct; verbosity = brief|balanced|detailed; format = prose|bullets|table|code_first; language = ru|en|auto; expertise = beginner|intermediate|expert; role — свободный текст о роли пользователя; constraint — свободный запрет или требование к ответам.
+- «Отвечай короче» — это verbosity = brief, «давай сразу код» — format = code_first, «без эмодзи» — constraint.`;
+
+const TASK_RULES = `
+- taskState описывает конечный автомат задачи. transition — один из planning|execution|validation|done|blocked|cancelled или null, если этап не меняется.
+- Разрешены только переходы planning→execution, execution→validation, validation→done, validation→execution, любой рабочий этап→blocked или cancelled, blocked→прежний этап.
+- newSteps заполняй только на этапе planning: это план задачи по шагам.
+- completedSteps — номера шагов, которые в этом обмене действительно выполнены.
+- block — причина блокировки, если продолжать нельзя без внешнего действия; иначе null.
+- expectedActor = agent|user и expectedAction — кто и что делает дальше.`;
+
+/**
+ * Системный промпт роутера собирается по включённым возможностям: выключенная
+ * персонализация не должна подсказывать модели слой профиля.
+ */
+export function buildMemoryRouterSystemPrompt(options: {
+  personalization: boolean;
+  task: boolean;
+}): string {
+  const writeShapes = [
+    `{"layer": "long_term", "kind": "profile|decision|knowledge", "key": "snake_case", "value": "строка", "reason": "строка"}`,
+    `{"layer": "working", "kind": "fact|constraint|step|open_question", "value": "строка", "reason": "строка"}`,
+    ...(options.personalization
+      ? [
+          `{"layer": "profile", "kind": "tone|verbosity|format|language|expertise|role|constraint", "value": "строка", "reason": "строка"}`,
+        ]
+      : []),
+  ].join(", ");
+  const taskShape = options.task
+    ? `, "taskState": {"transition": "planning|execution|validation|done|blocked|cancelled или null", "completedSteps": [1], "newSteps": ["строка"], "expectedActor": "agent|user", "expectedAction": "строка", "block": "строка или null"}`
+    : "";
+
+  return `Ты маршрутизатор памяти агента и не общаешься с пользователем.
 Разбери последний обмен и реши, что сохранить в память. Ответ — только JSON:
-{"task": {"title": "строка", "goal": "строка или null"} | null, "closeTask": false, "writes": [{"layer": "long_term", "kind": "profile|decision|knowledge", "key": "snake_case", "value": "строка", "reason": "строка"}, {"layer": "working", "kind": "fact|constraint|step|open_question", "value": "строка", "reason": "строка"}, {"layer": "profile", "kind": "tone|verbosity|format|language|expertise|role|constraint", "value": "строка", "reason": "строка"}]}
+{"task": {"title": "строка", "goal": "строка или null"} | null, "closeTask": false, "writes": [${writeShapes}]${taskShape}}
 
 Правила маршрутизации:
 - long_term — устойчивые сведения о пользователе, принятые решения и знания, полезные в других диалогах, а также всё, что пользователь явно просил запомнить. profile — про пользователя, decision — принятое решение, knowledge — проверенный факт предметной области.
-- working — данные текущей задачи: её факты, ограничения, шаги и открытые вопросы.
-- profile — то, КАК пользователь просит с ним разговаривать. Допустимые значения: tone = neutral|friendly|formal|direct; verbosity = brief|balanced|detailed; format = prose|bullets|table|code_first; language = ru|en|auto; expertise = beginner|intermediate|expert; role — свободный текст о роли пользователя; constraint — свободный запрет или требование к ответам.
-- «Отвечай короче» — это verbosity = brief, «давай сразу код» — format = code_first, «без эмодзи» — constraint.
+- working — данные текущей задачи: её факты, ограничения, шаги и открытые вопросы.${
+    options.personalization ? PROFILE_RULES : ""
+  }${options.task ? TASK_RULES : ""}
 - Дословный диалог уже сохранён отдельно: не пересказывай реплики, приветствия и формулировки ответа.
 - task заполняй, только когда в обмене видна цель работы; иначе null.
 - closeTask = true только если пользователь явно объявил задачу завершённой.
@@ -49,6 +87,7 @@ export const MEMORY_ROUTER_SYSTEM_PROMPT = `Ты маршрутизатор па
 - reason — одна короткая фраза по-русски.
 - Если сохранять нечего, верни "writes": [].
 - Не больше ${MAX_WRITES} записей.`;
+}
 
 export class MemoryRouterError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -63,6 +102,7 @@ export function buildMemoryRouterPrompt(input: {
   working: WorkingMemory | null;
   longTermKeys: readonly string[];
   profile: UserProfile | null;
+  task?: TaskSnapshot | null;
 }): string {
   const task = input.working
     ? `${input.working.task.title}${input.working.task.goal ? ` — ${input.working.task.goal}` : ""}`
@@ -78,6 +118,17 @@ export function buildMemoryRouterPrompt(input: {
           : "нет"
       }`
     : "профиль не подключён";
+  const taskLine = input.task
+    ? `«${input.task.run.title}», этап ${TASK_STAGE_LABELS[input.task.run.stage]}${
+        input.task.run.paused ? " (на паузе)" : ""
+      }, шаги: ${
+        input.task.steps.length > 0
+          ? input.task.steps
+              .map((step) => `${step.position}) ${step.title} — ${step.status}`)
+              .join("; ")
+          : "плана ещё нет"
+      }`
+    : "задача не заведена";
 
   return [
     `Известные ключи долговременной памяти: ${
@@ -85,7 +136,8 @@ export function buildMemoryRouterPrompt(input: {
     }`,
     `Текущая задача: ${task}`,
     `Слоты рабочей памяти: ${slots}`,
-    `Текущий профиль: ${profile}`,
+    ...(input.profile ? [`Текущий профиль: ${profile}`] : []),
+    `Состояние задачи: ${taskLine}`,
     `Сообщение пользователя: ${input.request.slice(0, MAX_EXCERPT_LENGTH)}`,
     `Ответ агента: ${input.response.slice(0, MAX_EXCERPT_LENGTH)}`,
   ].join("\n");
@@ -160,6 +212,42 @@ function parseWrite(value: unknown): MemoryRouterWrite | null {
  * Разбирает ответ роутера. Отдельная невалидная запись отбрасывается, а
  * полностью нечитаемый ответ считается ошибкой и не пишет в память ничего.
  */
+function parseTaskState(value: unknown): TaskStateUpdate | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  const transition = isTaskStage(candidate.transition) ? candidate.transition : null;
+  const completedSteps = Array.isArray(candidate.completedSteps)
+    ? candidate.completedSteps.filter(
+        (position): position is number =>
+          Number.isSafeInteger(position) && (position as number) > 0,
+      )
+    : [];
+  const newSteps = Array.isArray(candidate.newSteps)
+    ? candidate.newSteps
+        .map((title) => normalizeText(title, MAX_VALUE_LENGTH))
+        .filter((title): title is string => title !== null)
+        .slice(0, MAX_STEPS)
+    : [];
+  const expectedActor =
+    candidate.expectedActor === "agent" || candidate.expectedActor === "user"
+      ? candidate.expectedActor
+      : null;
+  const expectedAction = normalizeText(candidate.expectedAction, MAX_VALUE_LENGTH);
+  const block = normalizeText(candidate.block, MAX_VALUE_LENGTH);
+
+  if (
+    !transition &&
+    completedSteps.length === 0 &&
+    newSteps.length === 0 &&
+    !expectedAction &&
+    !block
+  ) {
+    return null;
+  }
+
+  return { transition, completedSteps, newSteps, expectedActor, expectedAction, block };
+}
+
 export function parseMemoryRouterResponse(raw: string): Omit<MemoryRouterResult, "cost"> {
   const parsed = parseJsonObject(raw);
   const rawWrites = Array.isArray(parsed.writes) ? parsed.writes : [];
@@ -175,7 +263,12 @@ export function parseMemoryRouterResponse(raw: string): Omit<MemoryRouterResult,
     if (title) task = { title, goal: normalizeText(candidate.goal, MAX_VALUE_LENGTH) };
   }
 
-  return { task, closeTask: parsed.closeTask === true, writes };
+  return {
+    task,
+    closeTask: parsed.closeTask === true,
+    writes,
+    taskState: parseTaskState(parsed.taskState),
+  };
 }
 
 export async function runMemoryRouter(input: {
@@ -185,9 +278,13 @@ export async function runMemoryRouter(input: {
   working: WorkingMemory | null;
   longTermKeys: readonly string[];
   profile: UserProfile | null;
+  task?: TaskSnapshot | null;
 }): Promise<MemoryRouterResult> {
   const completion = await input.llm.complete({
-    systemPrompt: MEMORY_ROUTER_SYSTEM_PROMPT,
+    systemPrompt: buildMemoryRouterSystemPrompt({
+      personalization: FEATURES.personalization && input.profile !== null,
+      task: Boolean(input.task),
+    }),
     userPrompt: buildMemoryRouterPrompt(input),
     maxOutputTokens: ROUTER_OUTPUT_TOKENS,
   });

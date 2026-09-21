@@ -1,4 +1,5 @@
 import { ProfileNotFoundError, getProfileStore } from "@/lib/profile-store";
+import { FEATURES, PERSONALIZATION_DISABLED_MESSAGE } from "@/lib/feature-flags";
 
 export const runtime = "nodejs";
 
@@ -7,6 +8,10 @@ const MAX_CONSTRAINT_LENGTH = 200;
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, context: RouteContext) {
+  if (!FEATURES.personalization) {
+    return Response.json({ error: PERSONALIZATION_DISABLED_MESSAGE }, { status: 404 });
+  }
+
   const { id } = await context.params;
   const profileId = Number(id);
   if (!Number.isSafeInteger(profileId) || profileId <= 0) {

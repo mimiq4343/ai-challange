@@ -1,4 +1,5 @@
 import { parseProfileBody } from "@/app/api/profiles/route";
+import { FEATURES, PERSONALIZATION_DISABLED_MESSAGE } from "@/lib/feature-flags";
 import {
   LastProfileError,
   ProfileNotFoundError,
@@ -10,6 +11,10 @@ export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, context: RouteContext) {
+  if (!FEATURES.personalization) {
+    return Response.json({ error: PERSONALIZATION_DISABLED_MESSAGE }, { status: 404 });
+  }
+
   const { id } = await context.params;
   const profileId = Number(id);
   if (!Number.isSafeInteger(profileId) || profileId <= 0) {
@@ -45,6 +50,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  if (!FEATURES.personalization) {
+    return Response.json({ error: PERSONALIZATION_DISABLED_MESSAGE }, { status: 404 });
+  }
+
   const { id } = await context.params;
   const profileId = Number(id);
   if (!Number.isSafeInteger(profileId) || profileId <= 0) {

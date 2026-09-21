@@ -63,7 +63,13 @@ test("short term memory keeps only the last window of messages", async () => {
     messages: storedMessages(20),
     longTerm: [],
     working: null,
-    layers: { shortTerm: true, working: true, longTerm: true, profile: false },
+    layers: {
+      shortTerm: true,
+      working: true,
+      longTerm: true,
+      profile: false,
+      task: false,
+    },
   });
 
   assert.equal(composed.history.length, SHORT_TERM_WINDOW_MESSAGES);
@@ -81,14 +87,26 @@ test("disabled layers drop their blocks and cost zero tokens", async () => {
     messages,
     longTerm,
     working,
-    layers: { shortTerm: true, working: true, longTerm: true, profile: false },
+    layers: {
+      shortTerm: true,
+      working: true,
+      longTerm: true,
+      profile: false,
+      task: false,
+    },
   });
   const disabled = await composeMemoryPrompt({
     profile: null,
     messages,
     longTerm,
     working,
-    layers: { shortTerm: false, working: false, longTerm: false, profile: false },
+    layers: {
+      shortTerm: false,
+      working: false,
+      longTerm: false,
+      profile: false,
+      task: false,
+    },
   });
 
   assert.equal(enabled.systemMessages.length, 3);
@@ -138,7 +156,13 @@ test("long term budget keeps the freshest entries and reports the rest as skippe
     messages: [],
     longTerm: bulky,
     working: null,
-    layers: { shortTerm: true, working: true, longTerm: true, profile: false },
+    layers: {
+      shortTerm: true,
+      working: true,
+      longTerm: true,
+      profile: false,
+      task: false,
+    },
   });
 
   assert.ok(composed.includedLongTerm.length > 0);

@@ -9,11 +9,11 @@ export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
 
 function parseLayers(value: unknown): MemoryLayerToggles | null {
-  if (value === undefined) return { ...ALL_MEMORY_LAYERS_ENABLED, task: false };
+  if (value === undefined) return ALL_MEMORY_LAYERS_ENABLED;
   if (typeof value !== "object" || value === null) return null;
 
   const candidate = value as Record<string, unknown>;
-  const toggles = ["shortTerm", "working", "longTerm", "profile"] as const;
+  const toggles = ["shortTerm", "working", "longTerm", "profile", "task"] as const;
   if (toggles.some((name) => typeof candidate[name] !== "boolean")) return null;
 
   return {
@@ -21,7 +21,7 @@ function parseLayers(value: unknown): MemoryLayerToggles | null {
     working: candidate.working as boolean,
     longTerm: candidate.longTerm as boolean,
     profile: candidate.profile as boolean,
-    task: false,
+    task: candidate.task as boolean,
   };
 }
 
@@ -45,14 +45,16 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json(
       {
         error:
-          "Поле layers должно содержать булевы shortTerm, working, longTerm и profile.",
+          "Поле layers должно содержать булевы shortTerm, working, longTerm, profile и task.",
       },
       { status: 400 },
     );
   }
 
   try {
-    const response = await PersonalizedChatAgent.fromEnvironment().respond(
+    const response = await PersonalizedChatAgent.fromEnvironment({
+      taskState: true,
+    }).respond(
       id,
       content.trim(),
       layers,
@@ -76,6 +78,7 @@ export async function POST(request: Request, context: RouteContext) {
         "X-Memory-Wm": String(layerTokens.workingTokens),
         "X-Memory-Stm": String(layerTokens.shortTermTokens),
         "X-Memory-Prof": String(layerTokens.profileTokens),
+        "X-Memory-Task": String(layerTokens.taskTokens),
         "X-Memory-Stm-Messages": String(response.shortTermMessages),
         "X-Memory-Profile": String(response.profile.id),
       },
@@ -108,7 +111,7 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    console.error(`Не удалось получить персонализированный ответ для ${id}.`, error);
+    console.error(`Не удалось получить ответ с состоянием задачи для ${id}.`, error);
     return Response.json({ error: "Не удалось получить ответ агента." }, { status: 500 });
   }
 }
