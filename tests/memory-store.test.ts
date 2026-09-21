@@ -151,6 +151,7 @@ test("router result writes both layers once and journals every write", async () 
     cost: null,
     taskState: null,
     taskProposal: null,
+    invariantProposals: [],
   });
 
   assert.equal(applied, 2);
@@ -183,6 +184,7 @@ test("exchange memory usage round trips layer tokens and router cost", async () 
     systemTokens: 40,
     profileTokens: 0,
     taskTokens: 0,
+    invariantTokens: 0,
     longTermTokens: 120,
     workingTokens: 0,
     shortTermTokens: 300,
@@ -198,6 +200,7 @@ test("exchange memory usage round trips layer tokens and router cost", async () 
       longTerm: true,
       profile: false,
       task: false,
+      invariants: false,
     },
     router: { promptTokens: 220, completionTokens: 40, costMicrosUsd: 114 },
   });
@@ -212,6 +215,7 @@ test("exchange memory usage round trips layer tokens and router cost", async () 
     longTerm: true,
     profile: false,
     task: false,
+    invariants: false,
   });
   assert.equal(usage?.router?.costMicrosUsd, 114);
   assert.equal(usage?.contextTokens, 4_568);

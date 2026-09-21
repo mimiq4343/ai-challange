@@ -70,6 +70,7 @@ test("short term memory keeps only the last window of messages", async () => {
       longTerm: true,
       profile: false,
       task: false,
+      invariants: false,
     },
   });
 
@@ -94,6 +95,7 @@ test("disabled layers drop their blocks and cost zero tokens", async () => {
       longTerm: true,
       profile: false,
       task: false,
+      invariants: false,
     },
   });
   const disabled = await composeMemoryPrompt({
@@ -107,6 +109,7 @@ test("disabled layers drop their blocks and cost zero tokens", async () => {
       longTerm: false,
       profile: false,
       task: false,
+      invariants: false,
     },
   });
 
@@ -166,6 +169,7 @@ test("long term budget keeps the freshest entries and reports the rest as skippe
       longTerm: true,
       profile: false,
       task: false,
+      invariants: false,
     },
   });
 

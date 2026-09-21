@@ -35,6 +35,7 @@ export function MemoryTelemetryBar({
 
   const segments = [
     { label: "sys", value: tokens.systemTokens, className: "bg-white/35" },
+    { label: "INV", value: tokens.invariantTokens, className: "bg-rose-400" },
     { label: "PROF", value: tokens.profileTokens, className: "bg-sky-400" },
     { label: "TASK", value: tokens.taskTokens, className: "bg-amber-300" },
     { label: "LTM", value: tokens.longTermTokens, className: "bg-emerald-400" },

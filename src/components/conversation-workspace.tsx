@@ -28,7 +28,8 @@ export type ConversationMessageRoute =
   | "compressed-messages"
   | "memory-messages"
   | "personalized-messages"
-  | "task-messages";
+  | "task-messages"
+  | "invariant-messages";
 
 export type ConversationWorkspaceEvents = {
   onConversationChange?: (conversationId: string | null) => void;

@@ -99,6 +99,7 @@ const SCHEMA = `
     system_tokens INTEGER NOT NULL CHECK (system_tokens >= 0),
     profile_tokens INTEGER NOT NULL DEFAULT 0 CHECK (profile_tokens >= 0),
     task_tokens INTEGER NOT NULL DEFAULT 0 CHECK (task_tokens >= 0),
+    invariant_tokens INTEGER NOT NULL DEFAULT 0 CHECK (invariant_tokens >= 0),
     long_term_tokens INTEGER NOT NULL CHECK (long_term_tokens >= 0),
     working_tokens INTEGER NOT NULL CHECK (working_tokens >= 0),
     short_term_tokens INTEGER NOT NULL CHECK (short_term_tokens >= 0),
@@ -165,6 +166,53 @@ const SCHEMA = `
   ) STRICT;
 
   CREATE INDEX IF NOT EXISTS task_events_run ON task_events(run_id, id);
+
+  CREATE TABLE IF NOT EXISTS memory_invariants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES memory_profiles(id) ON DELETE CASCADE,
+    category TEXT NOT NULL CHECK (
+      category IN ('architecture', 'tech_decision', 'stack', 'business_rule')
+    ),
+    statement TEXT NOT NULL,
+    rationale TEXT,
+    status TEXT NOT NULL CHECK (status IN ('active', 'retired')),
+    blocked_count INTEGER NOT NULL DEFAULT 0 CHECK (blocked_count >= 0),
+    origin TEXT NOT NULL CHECK (origin IN ('user', 'agent')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (profile_id, statement)
+  ) STRICT;
+
+  CREATE TABLE IF NOT EXISTS memory_invariant_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES memory_profiles(id) ON DELETE CASCADE,
+    category TEXT NOT NULL CHECK (
+      category IN ('architecture', 'tech_decision', 'stack', 'business_rule')
+    ),
+    statement TEXT NOT NULL,
+    rationale TEXT,
+    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (profile_id, statement)
+  ) STRICT;
+
+  CREATE TABLE IF NOT EXISTS memory_invariant_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL REFERENCES memory_profiles(id) ON DELETE CASCADE,
+    invariant_id INTEGER REFERENCES memory_invariants(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL CHECK (
+      kind IN ('created', 'updated', 'retired', 'restored', 'proposal_accepted',
+               'proposal_rejected', 'violation_blocked')
+    ),
+    origin TEXT NOT NULL CHECK (origin IN ('user', 'agent')),
+    statement TEXT,
+    detail TEXT,
+    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+  ) STRICT;
+
+  CREATE INDEX IF NOT EXISTS memory_invariant_events_profile
+    ON memory_invariant_events(profile_id, id);
 
   CREATE TABLE IF NOT EXISTS task_proposals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -313,6 +361,12 @@ export function ensureMemorySchema(database: DatabaseSync): void {
       database.exec(
         `ALTER TABLE memory_exchange_usage
            ADD COLUMN task_tokens INTEGER NOT NULL DEFAULT 0 CHECK (task_tokens >= 0)`,
+      );
+    }
+    if (!usageColumns.includes("invariant_tokens")) {
+      database.exec(
+        `ALTER TABLE memory_exchange_usage
+           ADD COLUMN invariant_tokens INTEGER NOT NULL DEFAULT 0 CHECK (invariant_tokens >= 0)`,
       );
     }
 

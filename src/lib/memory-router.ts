@@ -5,6 +5,7 @@ import {
   PROFILE_FIELD_VALUES,
   type UserProfile,
 } from "./profile-types";
+import type { InvariantCategory, InvariantInput } from "./invariant-types";
 import { isTaskStage, TASK_STAGE_LABELS } from "./task-machine";
 import type { TaskProposalInput, TaskSnapshot, TaskStateUpdate } from "./task-types";
 import type {
@@ -18,6 +19,19 @@ import { calculateDeepSeekCost } from "./token-cost";
 
 const MAX_WRITES = 6;
 const MAX_STEPS = 8;
+const MAX_INVARIANTS = 3;
+
+const INVARIANT_CATEGORIES: Record<InvariantCategory, true> = {
+  architecture: true,
+  tech_decision: true,
+  stack: true,
+  business_rule: true,
+};
+
+const INVARIANT_RULES = `
+- invariantProposals — правила, которые нельзя нарушать: выбранная архитектура, принятое техническое решение, ограничение по стеку, бизнес-правило. Заполняй, только когда в обмене прозвучало именно такое решение («решили», «только», «никогда», «запрещено»).
+- Формат: {"category": "architecture|tech_decision|stack|business_rule", "statement": "правило одной фразой", "rationale": "почему или null"}.
+- Пожелания по стилю ответа и шаги задачи инвариантами не являются. Если правил нет, верни пустой список.`;
 const MAX_KEY_LENGTH = 64;
 const MAX_VALUE_LENGTH = 400;
 const MAX_TITLE_LENGTH = 80;
@@ -60,6 +74,7 @@ const TASK_RULES = `
 export function buildMemoryRouterSystemPrompt(options: {
   personalization: boolean;
   task: boolean;
+  invariants?: boolean;
 }): string {
   const writeShapes = [
     `{"layer": "long_term", "kind": "profile|decision|knowledge", "key": "snake_case", "value": "строка", "reason": "строка"}`,
@@ -70,19 +85,22 @@ export function buildMemoryRouterSystemPrompt(options: {
         ]
       : []),
   ].join(", ");
+  const invariantShape = options.invariants
+    ? `, "invariantProposals": [{"category": "architecture|tech_decision|stack|business_rule", "statement": "строка", "rationale": "строка или null"}]`
+    : "";
   const taskShape = options.task
     ? `, "taskState": {"transition": "planning|execution|validation|done|blocked|cancelled или null", "completedSteps": [1], "newSteps": ["строка"], "expectedActor": "agent|user", "expectedAction": "строка", "block": "строка или null"}, "taskProposal": {"title": "строка", "goal": "строка или null"} | null`
     : "";
 
   return `Ты маршрутизатор памяти агента и не общаешься с пользователем.
 Разбери последний обмен и реши, что сохранить в память. Ответ — только JSON:
-{"task": {"title": "строка", "goal": "строка или null"} | null, "closeTask": false, "writes": [${writeShapes}]${taskShape}}
+{"task": {"title": "строка", "goal": "строка или null"} | null, "closeTask": false, "writes": [${writeShapes}]${taskShape}${invariantShape}}
 
 Правила маршрутизации:
 - long_term — устойчивые сведения о пользователе, принятые решения и знания, полезные в других диалогах, а также всё, что пользователь явно просил запомнить. profile — про пользователя, decision — принятое решение, knowledge — проверенный факт предметной области.
 - working — данные текущей задачи: её факты, ограничения, шаги и открытые вопросы.${
     options.personalization ? PROFILE_RULES : ""
-  }${options.task ? TASK_RULES : ""}
+  }${options.task ? TASK_RULES : ""}${options.invariants ? INVARIANT_RULES : ""}
 - Дословный диалог уже сохранён отдельно: не пересказывай реплики, приветствия и формулировки ответа.
 - task заполняй, только когда в обмене видна цель работы; иначе null.
 - closeTask = true только если пользователь явно объявил задачу завершённой.
@@ -251,6 +269,32 @@ function parseTaskState(value: unknown): TaskStateUpdate | null {
   return { transition, completedSteps, newSteps, expectedActor, expectedAction, block };
 }
 
+function parseInvariantProposals(value: unknown): InvariantInput[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (typeof item !== "object" || item === null) return null;
+      const candidate = item as Record<string, unknown>;
+      const statement = normalizeText(candidate.statement, MAX_VALUE_LENGTH);
+      const category = candidate.category;
+      if (
+        !statement ||
+        typeof category !== "string" ||
+        !(category in INVARIANT_CATEGORIES)
+      ) {
+        return null;
+      }
+      return {
+        category: category as InvariantCategory,
+        statement,
+        rationale: normalizeText(candidate.rationale, MAX_VALUE_LENGTH),
+      };
+    })
+    .filter((proposal): proposal is InvariantInput => proposal !== null)
+    .slice(0, MAX_INVARIANTS);
+}
+
 function parseTaskProposal(value: unknown): TaskProposalInput | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = value as Record<string, unknown>;
@@ -280,6 +324,7 @@ export function parseMemoryRouterResponse(raw: string): Omit<MemoryRouterResult,
     writes,
     taskState: parseTaskState(parsed.taskState),
     taskProposal: parseTaskProposal(parsed.taskProposal),
+    invariantProposals: parseInvariantProposals(parsed.invariantProposals),
   };
 }
 
@@ -293,11 +338,14 @@ export async function runMemoryRouter(input: {
   task?: TaskSnapshot | null;
   /** Слой задачи включён: правила автомата нужны и когда задачи ещё нет. */
   taskEnabled?: boolean;
+  /** Слой инвариантов включён: роутер может предлагать новые правила. */
+  invariantsEnabled?: boolean;
 }): Promise<MemoryRouterResult> {
   const completion = await input.llm.complete({
     systemPrompt: buildMemoryRouterSystemPrompt({
       personalization: FEATURES.personalization && input.profile !== null,
       task: input.taskEnabled ?? Boolean(input.task),
+      invariants: input.invariantsEnabled ?? false,
     }),
     userPrompt: buildMemoryRouterPrompt(input),
     maxOutputTokens: ROUTER_OUTPUT_TOKENS,

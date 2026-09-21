@@ -1,4 +1,5 @@
 import type { ProfileRouterWrite } from "./profile-types";
+import type { InvariantInput } from "./invariant-types";
 import type { TaskProposalInput, TaskStateUpdate } from "./task-types";
 
 export type MemoryLayer = "short_term" | "working" | "long_term" | "profile";
@@ -90,6 +91,7 @@ export type MemoryLayerToggles = {
   longTerm: boolean;
   profile: boolean;
   task: boolean;
+  invariants: boolean;
 };
 
 export const ALL_MEMORY_LAYERS_ENABLED: MemoryLayerToggles = {
@@ -98,10 +100,12 @@ export const ALL_MEMORY_LAYERS_ENABLED: MemoryLayerToggles = {
   longTerm: true,
   profile: true,
   task: true,
+  invariants: true,
 };
 
 export type MemoryLayerTokens = {
   systemTokens: number;
+  invariantTokens: number;
   profileTokens: number;
   taskTokens: number;
   longTermTokens: number;
@@ -170,5 +174,6 @@ export type MemoryRouterResult = {
   writes: MemoryRouterWrite[];
   taskState: TaskStateUpdate | null;
   taskProposal: TaskProposalInput | null;
+  invariantProposals: InvariantInput[];
   cost: MemoryRouterCost | null;
 };

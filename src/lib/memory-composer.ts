@@ -12,6 +12,7 @@ import type {
   WorkingSlot,
   WorkingSlotKind,
 } from "./memory-types";
+import { INVARIANT_CATEGORY_LABELS, type Invariant } from "./invariant-types";
 import { TASK_STAGE_LABELS } from "./task-machine";
 import type { TaskSnapshot } from "./task-types";
 import {
@@ -46,6 +47,23 @@ const LONG_TERM_HEADER =
   "Долговременная память агента. Используй эти сведения как известные факты и не переспрашивай их:";
 const WORKING_HEADER = "Рабочая память — состояние текущей задачи:";
 const TASK_HEADER = "Состояние задачи";
+const INVARIANT_HEADER = "Инварианты проекта, нарушать запрещено:";
+
+/** Свод правил идёт первым блоком: он сильнее любых других слоёв. */
+export function renderInvariantBlock(invariants: readonly Invariant[]): string {
+  const lines = invariants.map(
+    (invariant) =>
+      `- [${INVARIANT_CATEGORY_LABELS[invariant.category]}] ${invariant.statement}${
+        invariant.rationale ? ` Почему: ${invariant.rationale}` : ""
+      }`,
+  );
+
+  return [
+    INVARIANT_HEADER,
+    ...lines,
+    "Решение, нарушающее инвариант, предлагать нельзя даже как вариант. Если запрос требует нарушения, откажись, процитируй правило и предложи альтернативу в рамках.",
+  ].join("\n");
+}
 
 /**
  * Правила поведения для дня с конечным автоматом: без них состояние задачи
@@ -122,6 +140,7 @@ export function renderProfileBlock(profile: UserProfile): string {
 
 export type ComposedMemoryPrompt = {
   systemMessages: string[];
+  invariantBlock: string | null;
   profileBlock: string | null;
   taskBlock: string | null;
   longTermBlock: string | null;
@@ -159,12 +178,17 @@ async function selectWithinBudget<T>(
 
 export async function composeMemoryPrompt(input: {
   messages: readonly StoredMessage[];
+  invariants?: readonly Invariant[];
   profile: UserProfile | null;
   task?: TaskSnapshot | null;
   longTerm: readonly LongTermEntry[];
   working: WorkingMemory | null;
   layers: MemoryLayerToggles;
 }): Promise<ComposedMemoryPrompt> {
+  const invariantBlock =
+    input.layers.invariants && input.invariants && input.invariants.length > 0
+      ? renderInvariantBlock(input.invariants)
+      : null;
   const profileBlock =
     input.layers.profile && input.profile ? renderProfileBlock(input.profile) : null;
   const taskBlock = input.layers.task && input.task ? renderTaskBlock(input.task) : null;
@@ -214,11 +238,13 @@ export async function composeMemoryPrompt(input: {
   return {
     systemMessages: [
       taskBlock ? `${CHAT_SYSTEM_PROMPT}\n\n${TASK_STEPWISE_RULES}` : CHAT_SYSTEM_PROMPT,
+      invariantBlock,
       profileBlock,
       taskBlock,
       longTermBlock,
       workingBlock,
     ].filter((block): block is string => block !== null),
+    invariantBlock,
     profileBlock,
     taskBlock,
     longTermBlock,
@@ -246,9 +272,11 @@ export async function countMemoryPromptTokens(input: {
   const contextLimit = input.contextLimit ?? DEEPSEEK_FLASH_PROFILE.contextWindow;
   const reservedOutputTokens =
     input.reservedOutputTokens ?? DEEPSEEK_FLASH_PROFILE.responseReserveTokens;
-  const { profileBlock, taskBlock, longTermBlock, workingBlock } = input.composed;
+  const { invariantBlock, profileBlock, taskBlock, longTermBlock, workingBlock } =
+    input.composed;
   const base = input.composed.systemMessages[0];
-  const withProfile = profileBlock ? [base, profileBlock] : [base];
+  const withInvariants = invariantBlock ? [base, invariantBlock] : [base];
+  const withProfile = profileBlock ? [...withInvariants, profileBlock] : withInvariants;
   const withTask = taskBlock ? [...withProfile, taskBlock] : withProfile;
   const withLongTerm = longTermBlock ? [...withTask, longTermBlock] : withTask;
   const withWorking = workingBlock ? [...withLongTerm, workingBlock] : withLongTerm;
@@ -258,6 +286,7 @@ export async function countMemoryPromptTokens(input: {
 
   const [
     systemTokens,
+    invariantPrefix,
     profilePrefix,
     taskPrefix,
     longTermPrefix,
@@ -266,6 +295,7 @@ export async function countMemoryPromptTokens(input: {
     promptTokens,
   ] = await Promise.all([
     countTemplatedMessages(toSystem([base]), false),
+    countTemplatedMessages(toSystem(withInvariants), false),
     countTemplatedMessages(toSystem(withProfile), false),
     countTemplatedMessages(toSystem(withTask), false),
     countTemplatedMessages(toSystem(withLongTerm), false),
@@ -281,7 +311,8 @@ export async function countMemoryPromptTokens(input: {
     ),
   ]);
 
-  const profileTokens = profilePrefix - systemTokens;
+  const invariantTokens = invariantPrefix - systemTokens;
+  const profileTokens = profilePrefix - invariantPrefix;
   const taskTokens = taskPrefix - profilePrefix;
   const longTermTokens = longTermPrefix - taskPrefix;
   const workingTokens = workingPrefix - longTermPrefix;
@@ -289,6 +320,7 @@ export async function countMemoryPromptTokens(input: {
   const requestTokens = promptTokens - historyPrefix;
 
   if (
+    invariantTokens < 0 ||
     profileTokens < 0 ||
     taskTokens < 0 ||
     longTermTokens < 0 ||
@@ -301,6 +333,7 @@ export async function countMemoryPromptTokens(input: {
 
   return {
     systemTokens,
+    invariantTokens,
     profileTokens,
     taskTokens,
     longTermTokens,

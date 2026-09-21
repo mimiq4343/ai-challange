@@ -16,7 +16,8 @@
     "test:context-strategies": "node --conditions=react-server --import tsx --test tests/context-strategy-store.test.ts tests/context-strategy-agent.test.ts tests/context-strategy-benchmark.test.ts",
     "test:memory": "node --conditions=react-server --import tsx --test tests/memory-store.test.ts tests/memory-composer.test.ts tests/memory-router.test.ts tests/memory-chat-agent.test.ts",
     "test:profiles": "node --conditions=react-server --import tsx --test tests/profile-store.test.ts tests/personalized-agent.test.ts",
-    "test:tasks": "node --conditions=react-server --import tsx --test tests/task-machine.test.ts tests/task-store.test.ts tests/task-agent.test.ts"
+    "test:tasks": "node --conditions=react-server --import tsx --test tests/task-machine.test.ts tests/task-store.test.ts tests/task-agent.test.ts",
+    "test:invariants": "node --conditions=react-server --import tsx --test tests/invariant-store.test.ts tests/invariant-agent.test.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
