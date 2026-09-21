@@ -1,6 +1,6 @@
 # Day 13: task state machine
 
-- Branch `day-13` was created from `main` (days 1–12). The task state belongs to the
+- Branch `day-13` was created from `main` (days 1–12) and merged back on 2026-09-21. The task state belongs to the
   profile, not to a conversation, so pausing, closing the chat and continuing in a new
   one keeps the same stage and step.
 - Stages: `planning`, `execution`, `validation`, `done`, `blocked`, `cancelled`.
