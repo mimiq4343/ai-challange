@@ -38,7 +38,8 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 ## Conventions
 
 - Day 11 was developed on a branch created from `day-8`; after the merge `main`
-  carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main`.
+  carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main` and
+  was merged back, so `main` now carries days 1–12.
 - Reports belong in topical subdirectories of `reports/`, historical material in
   `archive/`; create either directory only when there is material for it.
 - This repository has no `openspec/` directory, so OpenSpec artifacts and steps do

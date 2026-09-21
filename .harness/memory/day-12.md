@@ -1,7 +1,8 @@
 # Day 12: assistant personalization
 
 - Branch `day-12` was created from `main` (days 1–11) and adds a user profile on top
-  of the Day 11 memory layers. Days 6–11 keep working.
+  of the Day 11 memory layers. Days 6–11 keep working. Merged into `main` on
+  2026-09-20 without conflicts, so `main` now carries days 1–12.
 - A profile owns its long term memory: `memory_long_term` gained `profile_id` and the
   uniqueness moved to `(profile_id, kind, key)`. Switching profiles switches both the
   answer style and the facts the agent knows.
