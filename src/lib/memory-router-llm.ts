@@ -90,6 +90,9 @@ export class ProviderMemoryRouterLlm implements MemoryRouterLlm {
           max_tokens: input.maxOutputTokens,
           temperature: 0,
           response_format: { type: "json_object" },
+          // Модель рассуждающая: без этого reasoning съедает весь лимит вывода и
+          // возвращает пустой JSON. Роутеру рассуждения не нужны — он извлекает факты.
+          reasoning_effort: "none",
         }),
       });
     } catch (error) {

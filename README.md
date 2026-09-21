@@ -324,6 +324,11 @@ POST   /api/conversations/:id/personalized-messages
 `profile_tokens`. Ответ `personalized-messages` добавляет заголовки
 `X-Memory-Prof` и `X-Memory-Profile`.
 
+Модель `deepseek-flash` рассуждающая, и `reasoning_content` списывается из
+`max_tokens`. Поэтому лимит ответа поднят до 16 384 токенов, а служебный вызов
+роутера памяти идёт с `reasoning_effort: "none"` — ему нужен только JSON. Без
+этого тяжёлые запросы возвращали пустой ответ с `finish_reason = length`.
+
 Day 13 добавляет STRICT-таблицы `task_runs`, `task_steps`, `task_events`,
 `task_proposals` и
 маршруты автомата:

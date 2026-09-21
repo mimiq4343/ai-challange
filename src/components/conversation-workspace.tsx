@@ -96,6 +96,17 @@ function readTokenBreakdown(headers: Headers): TokenBreakdown | null {
   return Object.fromEntries(entries) as TokenBreakdown;
 }
 
+/**
+ * Обрыв потока приходит из браузера как `TypeError` с локальным текстом вроде
+ * «Load failed», по которому непонятно, что произошло на сервере.
+ */
+function describeSendError(error: unknown): string {
+  if (error instanceof TypeError) {
+    return "Ответ оборвался: сервер не смог завершить поток. Обмен не сохранён, попробуйте ещё раз.";
+  }
+  return error instanceof Error ? error.message : "Не удалось получить ответ.";
+}
+
 export function ConversationWorkspace({
   initialConversations,
   initialDetail,
@@ -343,7 +354,7 @@ export function ConversationWorkspace({
     } catch (actionError) {
       if (!(actionError instanceof DOMException && actionError.name === "AbortError")) {
         setInput(content);
-        setError(actionError instanceof Error ? actionError.message : "Не удалось получить ответ.");
+        setError(describeSendError(actionError));
       }
       if (conversationId) {
         await restoreConversation(conversationId);

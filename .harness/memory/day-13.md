@@ -45,5 +45,22 @@
   event, otherwise the journal filled with noise.
 - In dev the store singletons live in `globalThis`, so adding a store method requires
   restarting `next dev`; HMR keeps the old instance and the page 500s.
+- `deepseek-flash` is a reasoning model and its `reasoning_content` is billed against
+  `max_tokens`. Two failures came from that:
+  1. The chat used `max_tokens = 4096` (the Day 8 response reserve). On a heavy request
+     («план питания на месяц с ограничениями по БЖУ») the whole budget went into
+     reasoning, `content` stayed empty, `finish_reason = length`, and the stream died
+     with «failed to pipe response» — the browser showed a bare «Load failed».
+     Fixed by raising `responseReserveTokens` to 16 384 (reserve and `max_tokens` stay
+     one number, so the context math keeps matching reality).
+  2. The memory router hit the same wall at 1 024 tokens and returned an empty JSON,
+     silently dropping every write and proposal. Fixed with `reasoning_effort: "none"`
+     on the router call: it extracts facts and needs no thinking (51 → 5 completion
+     tokens on a probe). Reasoning stays on for the chat itself.
+- `ChatAgentResponse.finishReason` now travels with the stream, so an empty answer is
+  reported as «модель израсходовала лимит ответа на рассуждения», and the workspace
+  turns a `TypeError` from a broken stream into a readable Russian message.
+- The router used to fill `taskState` instead of `taskProposal` when no task existed;
+  the rules now say plainly that an absent machine means `taskState = null`.
 - Permanent checks: `npm run test:tasks`, plus the memory, profile, token, compression
   and context-strategy suites.

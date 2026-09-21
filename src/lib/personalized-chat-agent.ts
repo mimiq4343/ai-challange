@@ -32,6 +32,9 @@ import type { ProfileRouterWrite, UserProfile } from "./profile-types";
 import { calculateDeepSeekCost } from "./token-cost";
 import { assertContextFits, countTextTokens } from "./token-counter";
 
+const EMPTY_RESPONSE_MESSAGE =
+  "Модель израсходовала лимит ответа на рассуждения и не выдала текст. Повторите запрос или сформулируйте его короче.";
+
 type LlmResponder = {
   readonly model: string;
   respond(
@@ -168,7 +171,13 @@ export class PersonalizedChatAgent {
 
           const assistantContent = new TextDecoder().decode(completeResponse);
           if (assistantContent.length === 0) {
-            throw new ChatAgentError("API вернул пустой ответ.", "upstream");
+            const reason = (await response.finishReason) ?? "unknown";
+            throw new ChatAgentError(
+              reason === "length"
+                ? EMPTY_RESPONSE_MESSAGE
+                : `API вернул пустой ответ (finish_reason: ${reason}).`,
+              "upstream",
+            );
           }
 
           await this.persistExchange({

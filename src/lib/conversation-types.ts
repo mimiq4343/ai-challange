@@ -45,6 +45,8 @@ export type ProviderTokenUsage = {
 export type ChatAgentResponse = {
   stream: ReadableStream<Uint8Array>;
   usage: Promise<ProviderTokenUsage | null>;
+  /** `length` означает, что лимит вывода исчерпан — у reasoning-модели ещё до ответа. */
+  finishReason?: Promise<string | null>;
 };
 
 export type ChatRequestOptions = {

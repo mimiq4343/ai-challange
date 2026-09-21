@@ -7,6 +7,7 @@ import {
   SHORT_TERM_WINDOW_MESSAGES,
 } from "../src/lib/memory-composer";
 import type { StoredMessage } from "../src/lib/conversation-types";
+import { DEEPSEEK_FLASH_PROFILE } from "../src/lib/model-profiles";
 import type { LongTermEntry, WorkingMemory } from "../src/lib/memory-types";
 
 function storedMessages(count: number): StoredMessage[] {
@@ -139,7 +140,10 @@ test("disabled layers drop their blocks and cost zero tokens", async () => {
       enabledTokens.requestTokens,
     enabledTokens.promptTokens,
   );
-  assert.equal(enabledTokens.contextTokens, enabledTokens.promptTokens + 4_096);
+  assert.equal(
+    enabledTokens.contextTokens,
+    enabledTokens.promptTokens + DEEPSEEK_FLASH_PROFILE.responseReserveTokens,
+  );
 });
 
 test("long term budget keeps the freshest entries and reports the rest as skipped", async () => {
