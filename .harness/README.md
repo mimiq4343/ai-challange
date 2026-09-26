@@ -11,6 +11,8 @@ contain secrets.
 [`memory/`](memory) — durable project decisions, verified findings and user
 corrections as short single-topic entries, written in English. Start from
 [`memory/MEMORY.md`](memory/MEMORY.md).
+Day 16 decisions are recorded in [`memory/day-16.md`](memory/day-16.md); its
+design was approved in chat, without separate design or plan files.
 
 ## Superpowers designs
 

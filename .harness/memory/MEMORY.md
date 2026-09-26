@@ -23,6 +23,7 @@ them against the current sources before relying on them.
 - [day-13.md](day-13.md) — task state machine, the pause invariant and the personalization feature flag.
 - [day-14.md](day-14.md) — project invariants, the pre-generation guard and the refusal contract.
 - [day-15.md](day-15.md) — transition preconditions, plan approval and the visible rejection.
+- [day-16.md](day-16.md) — MCP discovery, saved server configurations, npm-only deployment, and the collapsible inspector.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

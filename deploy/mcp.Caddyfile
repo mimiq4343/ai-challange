@@ -1,0 +1,6 @@
+# --- Flash MCP: отдельный npm-процесс, без Docker ---
+mcp.yees.ai {
+	reverse_proxy http://10.43.228.165:3001 {
+		flush_interval -1
+	}
+}
