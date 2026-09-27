@@ -1,0 +1,24 @@
+[Unit]
+Description=Flash Chat persistent GitHub scheduler
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=mimiq
+Group=mimiq
+WorkingDirectory=/data/workspaces/ai-challange
+Environment=PATH=/home/linuxbrew/.linuxbrew/Cellar/node/26.9.0/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/linuxbrew/.linuxbrew/bin/npm run scheduler:worker
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/data/workspaces/ai-challange/data
+
+[Install]
+WantedBy=multi-user.target

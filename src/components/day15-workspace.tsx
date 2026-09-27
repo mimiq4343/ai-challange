@@ -478,9 +478,11 @@ export function Day15Workspace({
     <WorkspaceInspector
       inspector={rail}
       label={
-        inspectorExtra
-          ? "MCP, инварианты, задача и память"
-          : "Инварианты, задача и память"
+        messageRoute === "scheduled-messages"
+          ? "Мониторинг, инварианты, задача и память"
+          : inspectorExtra
+            ? "MCP, инварианты, задача и память"
+            : "Инварианты, задача и память"
       }
     >
       <ConversationWorkspace
@@ -492,17 +494,24 @@ export function Day15Workspace({
         examplePrompts={examplePrompts}
         requestBodyExtra={{ layers }}
         inputFooter={
-          <MemoryTelemetryBar
-            tokens={telemetryTokens}
-            source={telemetrySource}
-            shortTermMessages={
-              previewMessages ?? storedUsage?.shortTermMessages ?? null
-            }
-            windowMessages={shortTermWindow}
-            routerCostMicrosUsd={storedUsage?.router?.costMicrosUsd ?? null}
-            totalCostMicrosUsd={totalCost}
-            updating={updating}
-          />
+          <>
+            <MemoryTelemetryBar
+              tokens={telemetryTokens}
+              source={telemetrySource}
+              shortTermMessages={
+                previewMessages ?? storedUsage?.shortTermMessages ?? null
+              }
+              windowMessages={shortTermWindow}
+              routerCostMicrosUsd={storedUsage?.router?.costMicrosUsd ?? null}
+              totalCostMicrosUsd={totalCost}
+              updating={updating}
+            />
+            {messageRoute === "scheduled-messages" && (
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                Отмена или ошибка ответа не удаляет созданное расписание. Перед повтором команды проверьте мониторинг в панели.
+              </p>
+            )}
+          </>
         }
       />
     </WorkspaceInspector>

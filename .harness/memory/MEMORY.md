@@ -25,6 +25,7 @@ them against the current sources before relying on them.
 - [day-15.md](day-15.md) — transition preconditions, plan approval and the visible rejection.
 - [day-16.md](day-16.md) — MCP discovery, saved server configurations, npm-only deployment, and the collapsible inspector.
 - [day-17.md](day-17.md) — real GitHub MCP tool calls, guarded agent integration, transient tool cards, and terminal stream semantics.
+- [day-18.md](day-18.md) — persistent MCP schedules, fenced background execution, aggregate summaries, and systemd deployment.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

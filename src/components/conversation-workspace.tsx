@@ -32,7 +32,8 @@ export type ConversationMessageRoute =
   | "personalized-messages"
   | "task-messages"
   | "invariant-messages"
-  | "mcp-messages";
+  | "mcp-messages"
+  | "scheduled-messages";
 
 export type ConversationWorkspaceEvents = {
   onConversationChange?: (conversationId: string | null) => void;
@@ -342,7 +343,7 @@ export function ConversationWorkspace({
         );
       }
 
-      if (messageRoute === "mcp-messages") {
+      if (messageRoute === "mcp-messages" || messageRoute === "scheduled-messages") {
         await consumeMcpChatStream(response.body, (event) => {
           if (event.type === "metadata") {
             applyHeaders(new Headers(event.headers));
