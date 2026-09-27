@@ -1,6 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 
+import {
+  fetchGitHubRepository,
+  githubRepositoryInputSchema,
+  githubRepositoryOutputSchema,
+} from "./github-repository-tool";
+
 export function createDemoMcpServer(): McpServer {
   const server = new McpServer({ name: "flash-mcp", version: "1.0.0" });
   server.registerTool("add", {
@@ -26,6 +32,16 @@ export function createDemoMcpServer(): McpServer {
   }, () => {
     const utc = new Date().toISOString();
     return { content: [{ type: "text", text: utc }], structuredContent: { utc } };
+  });
+  server.registerTool("get_repository_info", {
+    description: "Получает актуальные сведения о публичном репозитории GitHub: описание, язык, звёзды, форки и ссылку. Требуются владелец и имя репозитория.",
+    inputSchema: githubRepositoryInputSchema,
+    outputSchema: githubRepositoryOutputSchema,
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, async ({ owner, repo }, extra) => {
+    // SDK преобразует исключения в isError; причины сохраняются в GitHubRepositoryError.
+    const data = await fetchGitHubRepository({ owner, repo }, extra.signal);
+    return { content: [{ type: "text", text: JSON.stringify(data) }], structuredContent: data };
   });
   return server;
 }

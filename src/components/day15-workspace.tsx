@@ -5,6 +5,7 @@ import { useRef, useState, type ReactNode } from "react";
 import {
   ConversationWorkspace,
   type ConversationWorkspaceEvents,
+  type ConversationMessageRoute,
 } from "@/components/conversation-workspace";
 import { MemoryInspector } from "@/components/memory-inspector";
 import {
@@ -46,6 +47,8 @@ type Day15WorkspaceProps = {
   shortTermWindow: number;
   model: string | null;
   inspectorExtra?: ReactNode;
+  messageRoute?: ConversationMessageRoute;
+  examplePrompts?: readonly string[];
 };
 
 const MEMORY_HEADERS = {
@@ -96,6 +99,8 @@ export function Day15Workspace({
   shortTermWindow,
   model,
   inspectorExtra,
+  messageRoute = "invariant-messages",
+  examplePrompts,
 }: Day15WorkspaceProps) {
   const [layers, setLayers] = useState<MemoryLayerToggles>(
     ALL_MEMORY_LAYERS_ENABLED,
@@ -213,6 +218,8 @@ export function Day15Workspace({
     },
     onExchangeFailed(conversationId) {
       setUpdating(false);
+      setPreview(null);
+      setPreviewMessages(null);
       void reload(conversationId);
     },
   };
@@ -481,7 +488,8 @@ export function Day15Workspace({
         initialDetail={initialDetail}
         model={model}
         events={events}
-        messageRoute="invariant-messages"
+        messageRoute={messageRoute}
+        examplePrompts={examplePrompts}
         requestBodyExtra={{ layers }}
         inputFooter={
           <MemoryTelemetryBar

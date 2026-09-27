@@ -2,9 +2,12 @@ import "server-only";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { CallToolResultSchema, type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
+import type { JsonSchemaValidator } from "@modelcontextprotocol/sdk/validation";
 import type { Dispatcher } from "undici";
 
-import { MCP_DISCOVERY_TIMEOUT_MS, MCP_MAX_TOOL_PAGES } from "./mcp-config";
+import { MCP_DISCOVERY_TIMEOUT_MS, MCP_MAX_RESPONSE_BYTES, MCP_MAX_TOOL_PAGES, MCP_SESSION_CLEANUP_TIMEOUT_MS, MCP_TOOL_CHAT_LIMITS } from "./mcp-config";
 import { createMcpDispatcher, limitMcpResponse, McpValidationError, parseMcpUrl } from "./mcp-network";
 import type { McpDiscoveryResult, McpTool } from "./mcp-types";
 
@@ -15,10 +18,21 @@ export class McpConnectionError extends Error {
   }
 }
 
-export async function discoverMcpTools(endpoint: string): Promise<McpDiscoveryResult> {
+export type McpToolSession = McpDiscoveryResult & {
+  callTool(name: string, args: Record<string, unknown>): Promise<CallToolResult>;
+};
+
+// Discovery и выполнение используют один защищённый транспорт и одну сессию.
+export async function withMcpTools<T>(
+  endpoint: string,
+  callerSignal: AbortSignal,
+  operation: (session: McpToolSession) => Promise<T>,
+): Promise<T> {
+  callerSignal.throwIfAborted();
   const url = parseMcpUrl(endpoint);
   const dispatcher = createMcpDispatcher(url);
-  const signal = AbortSignal.timeout(MCP_DISCOVERY_TIMEOUT_MS);
+  const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(MCP_TOOL_CHAT_LIMITS.timeoutMs)]);
+  let terminating = false;
   const transport = new StreamableHTTPClientTransport(url, {
     async fetch(input, init) {
       if (new URL(input).href !== url.href) {
@@ -29,7 +43,9 @@ export async function discoverMcpTools(endpoint: string): Promise<McpDiscoveryRe
         dispatcher,
         redirect: "error",
         credentials: "omit",
-        signal: init?.signal ? AbortSignal.any([signal, init.signal]) : signal,
+        signal: terminating
+          ? AbortSignal.timeout(MCP_SESSION_CLEANUP_TIMEOUT_MS)
+          : AbortSignal.any([signal, AbortSignal.timeout(MCP_DISCOVERY_TIMEOUT_MS), ...(init?.signal ? [init.signal] : [])]),
       };
       return limitMcpResponse(await fetch(input, options));
     },
@@ -40,61 +56,125 @@ export async function discoverMcpTools(endpoint: string): Promise<McpDiscoveryRe
       reconnectionDelayGrowFactor: 1,
     },
   });
-  const client = new Client({ name: "flash-agent", version: "1.0.0" });
+  const schemaValidator = new AjvJsonSchemaValidator();
+  const client = new Client({ name: "flash-agent", version: "1.0.0" }, { jsonSchemaValidator: schemaValidator });
+  const metadata = new Map<string, { taskRequired: boolean; validate?: JsonSchemaValidator<unknown> }>();
   const requestOptions = { signal, timeout: MCP_DISCOVERY_TIMEOUT_MS };
-  const errors: unknown[] = [];
-  let discovery: McpDiscoveryResult | undefined;
+  const cleanupErrors: unknown[] = [];
+  let result: T | undefined;
+  let failed = false;
+  let failure: unknown;
 
-  try {
-    await client.connect(transport, requestOptions);
-    const server = client.getServerVersion();
-    if (!server || !client.getServerCapabilities()?.tools) {
-      throw new McpConnectionError("MCP-сервер не объявил поддержку инструментов.", 502);
+  async function request<R>(operation: () => Promise<R>): Promise<R> {
+    signal.throwIfAborted();
+    try {
+      return await operation();
+    } catch (cause) {
+      if (callerSignal.aborted) throw callerSignal.reason;
+      if (cause instanceof McpConnectionError) throw cause;
+      throw new McpConnectionError(
+        signal.aborted
+          ? "Истекло время ожидания MCP-сервера."
+          : "Не удалось выполнить запрос к MCP-серверу. Проверьте HTTPS URL и доступность Streamable HTTP.",
+        signal.aborted ? 504 : 502,
+        { cause },
+      );
     }
-    const tools: McpTool[] = [];
-    const cursors = new Set<string>();
-    let cursor: string | undefined;
-    do {
-      const page = await client.listTools(cursor === undefined ? undefined : { cursor }, requestOptions);
-      tools.push(...page.tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })));
-      cursor = page.nextCursor;
-      if (cursor !== undefined) {
-        if (cursors.has(cursor) || cursors.size >= MCP_MAX_TOOL_PAGES - 1) {
-          throw new McpConnectionError("MCP-сервер не завершил выдачу списка инструментов.", 502);
-        }
-        cursors.add(cursor);
-      }
-    } while (cursor !== undefined);
-    discovery = {
-      server: { name: server.name, version: server.version },
-      tools,
-      checkedAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    errors.push(error);
   }
 
   try {
-    if (transport.sessionId && !signal.aborted) await transport.terminateSession();
+    const discovery = await request(async (): Promise<McpDiscoveryResult> => {
+      await client.connect(transport, requestOptions);
+      const server = client.getServerVersion();
+      if (!server || !client.getServerCapabilities()?.tools) {
+        throw new McpConnectionError("MCP-сервер не объявил поддержку инструментов.", 502);
+      }
+      const tools: McpTool[] = [];
+      const cursors = new Set<string>();
+      let cursor: string | undefined;
+      let toolBytes = 0;
+      do {
+        const page = await client.listTools(cursor === undefined ? undefined : { cursor }, requestOptions);
+        toolBytes += Buffer.byteLength(JSON.stringify(page.tools));
+        if (toolBytes > MCP_MAX_RESPONSE_BYTES) {
+          throw new McpConnectionError("Список инструментов MCP превышает допустимый размер.", 502);
+        }
+        tools.push(...page.tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })));
+        // SDK сбрасывает свой кэш на каждой странице; сохраняем полный контракт.
+        for (const tool of page.tools) {
+          metadata.set(tool.name, {
+            taskRequired: tool.execution?.taskSupport === "required",
+            validate: tool.outputSchema ? schemaValidator.getValidator(tool.outputSchema) : undefined,
+          });
+        }
+        cursor = page.nextCursor;
+        if (cursor !== undefined) {
+          if (cursors.has(cursor) || cursors.size >= MCP_MAX_TOOL_PAGES - 1) {
+            throw new McpConnectionError("MCP-сервер не завершил выдачу списка инструментов.", 502);
+          }
+          cursors.add(cursor);
+        }
+      } while (cursor !== undefined);
+      return {
+        server: { name: server.name, version: server.version },
+        tools,
+        checkedAt: new Date().toISOString(),
+      };
+    });
+    result = await operation({
+      ...discovery,
+      callTool: (name, args) => request(async () => {
+        const tool = metadata.get(name);
+        if (!tool) throw new McpConnectionError("MCP-инструмент отсутствует в списке сервера.", 502);
+        if (tool.taskRequired) throw new McpConnectionError("MCP-инструмент требует неподдерживаемое выполнение через tasks.", 502);
+        const output = await client.callTool({ name, arguments: args }, CallToolResultSchema, requestOptions) as CallToolResult;
+        if (tool.validate) {
+          if (!output.structuredContent && !output.isError) {
+            throw new McpConnectionError("MCP-инструмент не вернул обязательный структурированный результат.", 502);
+          }
+          if (output.structuredContent && !tool.validate(output.structuredContent).valid) {
+            throw new McpConnectionError("Результат MCP-инструмента не соответствует его схеме.", 502);
+          }
+        }
+        return output;
+      }),
+    });
+    signal.throwIfAborted();
   } catch (error) {
-    errors.push(error);
+    failed = true;
+    failure = error;
+  }
+
+  try {
+    if (transport.sessionId) {
+      terminating = true;
+      await transport.terminateSession();
+    }
+  } catch (error) {
+    cleanupErrors.push(error);
   }
   // Оба ресурса освобождаются даже при ошибке завершения удалённой сессии.
   const cleanup = await Promise.allSettled([client.close(), dispatcher.destroy()]);
-  for (const result of cleanup) {
-    if (result.status === "rejected") errors.push(result.reason);
+  for (const outcome of cleanup) {
+    if (outcome.status === "rejected") cleanupErrors.push(outcome.reason);
   }
-  if (errors.length > 0) {
-    const cause = errors.length === 1 ? errors[0] : new AggregateError(errors, "MCP discovery failed");
-    if (cause instanceof McpConnectionError) throw cause;
-    throw new McpConnectionError(
-      signal.aborted
-        ? "MCP-сервер не ответил за 15 секунд."
-        : "Не удалось получить инструменты MCP. Проверьте HTTPS URL, доступность сервера и поддержку Streamable HTTP без авторизации.",
-      signal.aborted ? 504 : 502,
-      { cause },
-    );
+  if (callerSignal.aborted) throw callerSignal.reason;
+  // Ошибки модели/отмены не маскируются ошибкой закрытия MCP.
+  if (failed) throw failure;
+  if (cleanupErrors.length > 0) {
+    throw new McpConnectionError("Не удалось корректно закрыть MCP-сессию.", 502, {
+      cause: new AggregateError(cleanupErrors, "MCP cleanup failed"),
+    });
   }
-  if (!discovery) throw new McpConnectionError("MCP-сервер не вернул результат проверки.", 502);
-  return discovery;
+  return result as T;
+}
+
+export async function discoverMcpTools(endpoint: string): Promise<McpDiscoveryResult> {
+  const signal = AbortSignal.timeout(MCP_DISCOVERY_TIMEOUT_MS);
+  try {
+    return await withMcpTools(endpoint, signal, async ({ server, tools, checkedAt }) => ({ server, tools, checkedAt }));
+  } catch (cause) {
+    if (!signal.aborted) throw cause;
+    throw new McpConnectionError("MCP-сервер не ответил за 15 секунд.", 504, { cause });
+  }
 }

@@ -29,7 +29,13 @@ async function readResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export function McpServerPanel({ initialServers }: { initialServers: McpServerConfig[] }) {
+export function McpServerPanel({
+  initialServers,
+  toolsEnabled = false,
+}: {
+  initialServers: McpServerConfig[];
+  toolsEnabled?: boolean;
+}) {
   const [servers, setServers] = useState(initialServers);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -168,7 +174,9 @@ export function McpServerPanel({ initialServers }: { initialServers: McpServerCo
       </header>
       <p className="text-xs leading-relaxed text-muted">
         Сохраните адрес и отдельно проверьте соединение: handshake и tools/list.
-        Инструменты только отображаются — агент их не вызывает.
+        {toolsEnabled
+          ? " В чате агент сам выбирает, когда вызвать get_repository_info на настроенном GitHub MCP-сервере. Остальные серверы доступны здесь для проверки."
+          : " Инструменты только отображаются — агент их не вызывает."}
       </p>
       <form aria-label="Добавить MCP-сервер" onSubmit={(event) => void addServer(event)} className="flex min-w-0 flex-col gap-3">
         <div>
