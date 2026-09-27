@@ -478,12 +478,12 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Заполните `.env.local`:
+Для DeepSeek-V4.1-Flash заполните `.env.local`:
 
 ```dotenv
 OPENAI_BASE_URL=https://api.deepseek.com/v1
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=deepseek-v4-flash
+OPENAI_MODEL=deepseek-flash
 ```
 
 Для Day 5 также нужны `GROQ_BASE_URL` и `GROQ_API_KEY`. Подойдёт любой провайдер

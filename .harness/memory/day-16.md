@@ -1,6 +1,6 @@
 # Day 16: MCP discovery
 
-Snapshot: 2026-09-26.
+Snapshot: 2026-09-27.
 
 - `day-16` starts from `main` after the Day 15 merge. `/day-16` reuses
   `Day15Workspace` through its `inspectorExtra` slot; it does not clone the agent.
@@ -12,6 +12,11 @@ Snapshot: 2026-09-26.
 - Discovery uses Streamable HTTP, closes the connection after all `tools/list`
   pages, and does not execute tools through the LLM. The example server exposes
   real `add` and `get_current_time` tools without access to files or credentials.
+- LLM credentials are separate from MCP discovery and are not included in a
+  checkout. The development runtime uses an ignored `.env.local` with mode `0600`.
+  DeepSeek-V4.1-Flash uses `OPENAI_MODEL=deepseek-flash`, already accepted by the
+  existing model profile. After configuring a new checkout, verify a real chat
+  response and its persistence; successful MCP discovery alone cannot validate it.
 - Profile-scoped MCP configurations live in the existing SQLite database. Only
   name and HTTPS URL are saved; authentication headers, URL credentials/query
   parameters, redirects and arbitrary private-network endpoints are not supported.
