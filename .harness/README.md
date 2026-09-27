@@ -11,6 +11,8 @@ contain secrets.
 [`memory/`](memory) — durable project decisions, verified findings and user
 corrections as short single-topic entries, written in English. Start from
 [`memory/MEMORY.md`](memory/MEMORY.md).
+Day 16 decisions are recorded in [`memory/day-16.md`](memory/day-16.md); its
+design was approved in chat, without separate design or plan files.
 
 ## Superpowers designs
 
@@ -45,8 +47,8 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 
 - Day 11 was developed on a branch created from `day-8`; after the merge `main`
   carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main` and
-  was merged back; Day 13, Day 14 and Day 15 followed the same route, so `main` now
-  carries days 1–15.
+  was merged back; Day 13, Day 14, Day 15 and Day 16 followed the same route, so
+  `main` now carries days 1–16.
 - Reports belong in topical subdirectories of `reports/`, historical material in
   `archive/`; create either directory only when there is material for it.
 - This repository has no `openspec/` directory, so OpenSpec artifacts and steps do

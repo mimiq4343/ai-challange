@@ -10,6 +10,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "mcp:server": "node --import tsx scripts/mcp-server.ts",
+    "mcp:list": "node --conditions=react-server --import tsx scripts/mcp-list.ts",
+    "test:mcp": "node --conditions=react-server --import tsx --test tests/mcp-network.test.ts tests/mcp-server.test.ts tests/mcp-store.test.ts tests/mcp-api.test.ts",
     "test:persistence": "node --conditions=react-server --import tsx --test tests/conversation-store.test.ts tests/persistent-chat-agent.test.ts",
     "test:tokens": "node --conditions=react-server --import tsx --test tests/token-counter.test.ts tests/token-cost.test.ts tests/chat-agent-usage.test.ts tests/conversation-usage.test.ts tests/overflow-experiment.test.ts",
     "test:compression": "node --conditions=react-server --import tsx --test tests/history-compression.test.ts tests/conversation-compression.test.ts tests/chat-agent-options.test.ts tests/compressed-chat-agent.test.ts tests/compression-benchmark.test.ts",
@@ -21,13 +24,16 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
+    "@modelcontextprotocol/sdk": "1.30.1",
     "@phosphor-icons/react": "^2.1.10",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "undici": "7.30.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

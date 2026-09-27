@@ -25,3 +25,10 @@ README rules (the user corrected them twice; follow them without reminders):
   AS SOON AS a new day branch appears or changes materially, without waiting for
   the day code to be merged into main: the README in main lives separately from
   the application code in main.
+
+## README size exception
+
+2026-09-27: The user explicitly approved exceeding 800 lines in the root
+`README.md`. Keep the consolidated timeline and useful setup details together;
+do not split or omit them solely to satisfy the general file-size limit. This
+exception applies to `README.md`, not to source files or other documentation.

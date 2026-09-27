@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/day-13", label: "Day 13" },
   { href: "/day-14", label: "Day 14" },
   { href: "/day-15", label: "Day 15" },
+  { href: "/day-16", label: "Day 16" },
 ];
 
 export function SiteHeader() {

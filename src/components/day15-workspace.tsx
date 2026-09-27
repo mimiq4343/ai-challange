@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { BrainIcon, XIcon } from "@phosphor-icons/react";
+import { useRef, useState, type ReactNode } from "react";
 
 import {
   ConversationWorkspace,
@@ -14,6 +13,7 @@ import {
 } from "@/components/memory-telemetry-bar";
 import { InvariantPanel } from "@/components/invariant-panel";
 import { TaskStatePanel } from "@/components/task-state-panel";
+import { WorkspaceInspector } from "@/components/workspace-inspector";
 import type {
   ConversationDetail,
   ConversationSummary,
@@ -45,6 +45,7 @@ type Day15WorkspaceProps = {
   initialTotalCostMicrosUsd: number;
   shortTermWindow: number;
   model: string | null;
+  inspectorExtra?: ReactNode;
 };
 
 const MEMORY_HEADERS = {
@@ -94,6 +95,7 @@ export function Day15Workspace({
   initialTotalCostMicrosUsd,
   shortTermWindow,
   model,
+  inspectorExtra,
 }: Day15WorkspaceProps) {
   const [layers, setLayers] = useState<MemoryLayerToggles>(
     ALL_MEMORY_LAYERS_ENABLED,
@@ -108,17 +110,7 @@ export function Day15Workspace({
   const [updating, setUpdating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
   const activeIdRef = useRef(initialDetail?.conversation.id ?? null);
-  const sheetRef = useRef<HTMLElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!inspectorOpen) return;
-    const sheet = sheetRef.current;
-    sheet?.querySelector<HTMLElement>(".chat-scroll")?.scrollTo({ top: 0 });
-    sheet?.querySelector<HTMLElement>("[data-mobile-sheet-close]")?.focus();
-  }, [inspectorOpen]);
 
   async function reloadTask(): Promise<void> {
     const [taskResult, invariantResult] = await Promise.all([
@@ -233,38 +225,9 @@ export function Day15Workspace({
       ? "stored"
       : null;
 
-  function closeInspector() {
-    setInspectorOpen(false);
-    triggerRef.current?.focus();
-  }
-
-  function handleSheetKeyDown(event: React.KeyboardEvent<HTMLElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeInspector();
-      return;
-    }
-    if (event.key !== "Tab") return;
-
-    const focusable = Array.from(
-      event.currentTarget.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    ).filter((element) => element.offsetParent !== null);
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable.at(-1) as HTMLElement;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
   const rail = (
     <>
+      {inspectorExtra}
       <InvariantPanel
         snapshot={invariants}
         enabled={layers.invariants}
@@ -505,74 +468,35 @@ export function Day15Workspace({
   );
 
   return (
-    <div className="relative grid h-full min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_23rem]">
-      <div className="min-h-0 min-w-0">
-        <ConversationWorkspace
-          initialConversations={initialConversations}
-          initialDetail={initialDetail}
-          model={model}
-          events={events}
-          messageRoute="invariant-messages"
-          requestBodyExtra={{ layers }}
-          inputFooter={
-            <MemoryTelemetryBar
-              tokens={telemetryTokens}
-              source={telemetrySource}
-              shortTermMessages={
-                previewMessages ?? storedUsage?.shortTermMessages ?? null
-              }
-              windowMessages={shortTermWindow}
-              routerCostMicrosUsd={storedUsage?.router?.costMicrosUsd ?? null}
-              totalCostMicrosUsd={totalCost}
-              updating={updating}
-            />
-          }
-        />
-      </div>
-
-      {inspectorOpen && (
-        <button
-          type="button"
-          aria-label="Закрыть инспектор памяти"
-          onClick={closeInspector}
-          className="fixed inset-0 z-30 cursor-default bg-black/70 xl:hidden"
-        />
-      )}
-
-      <aside
-        ref={sheetRef}
-        aria-label="Инварианты, задача и память"
-        aria-modal={inspectorOpen || undefined}
-        role={inspectorOpen ? "dialog" : undefined}
-        onKeyDown={handleSheetKeyDown}
-        className={`${
-          inspectorOpen
-            ? "fixed inset-x-2 bottom-2 top-[8dvh] z-40 flex"
-            : "hidden xl:flex"
-        } min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_24px_80px_rgba(3,5,16,0.55)]`}
-      >
-        <button
-          data-mobile-sheet-close
-          type="button"
-          onClick={closeInspector}
-          aria-label="Закрыть инспектор памяти"
-          className="absolute right-3 top-3 z-10 flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface text-muted transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent xl:hidden"
-        >
-          <XIcon size={18} aria-hidden />
-        </button>
-        <div className="chat-scroll min-h-0 flex-1 overflow-y-auto">{rail}</div>
-      </aside>
-
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label="Открыть инварианты, задачу и память"
-        aria-expanded={inspectorOpen}
-        onClick={() => setInspectorOpen(true)}
-        className="absolute right-3 top-2 flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border border-accent/25 bg-surface text-accent shadow-lg transition-colors hover:bg-accent/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent xl:hidden"
-      >
-        <BrainIcon size={19} weight="bold" aria-hidden />
-      </button>
-    </div>
+    <WorkspaceInspector
+      inspector={rail}
+      label={
+        inspectorExtra
+          ? "MCP, инварианты, задача и память"
+          : "Инварианты, задача и память"
+      }
+    >
+      <ConversationWorkspace
+        initialConversations={initialConversations}
+        initialDetail={initialDetail}
+        model={model}
+        events={events}
+        messageRoute="invariant-messages"
+        requestBodyExtra={{ layers }}
+        inputFooter={
+          <MemoryTelemetryBar
+            tokens={telemetryTokens}
+            source={telemetrySource}
+            shortTermMessages={
+              previewMessages ?? storedUsage?.shortTermMessages ?? null
+            }
+            windowMessages={shortTermWindow}
+            routerCostMicrosUsd={storedUsage?.router?.costMicrosUsd ?? null}
+            totalCostMicrosUsd={totalCost}
+            updating={updating}
+          />
+        }
+      />
+    </WorkspaceInspector>
   );
 }
