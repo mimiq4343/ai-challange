@@ -10,6 +10,7 @@ import type { Dispatcher } from "undici";
 import { MCP_DISCOVERY_TIMEOUT_MS, MCP_MAX_RESPONSE_BYTES, MCP_MAX_TOOL_PAGES, MCP_SESSION_CLEANUP_TIMEOUT_MS, MCP_TOOL_CHAT_LIMITS } from "./mcp-config";
 import { createMcpDispatcher, limitMcpResponse, McpValidationError, parseMcpUrl } from "./mcp-network";
 import type { McpDiscoveryResult, McpTool } from "./mcp-types";
+import { SCHEDULER_MCP_URL } from "./scheduler-config";
 
 export class McpConnectionError extends Error {
   constructor(message: string, readonly status: number, options?: ErrorOptions) {
@@ -27,13 +28,27 @@ export async function withMcpTools<T>(
   endpoint: string,
   callerSignal: AbortSignal,
   operation: (session: McpToolSession) => Promise<T>,
+  authorization?: { token: string; profileId: number },
 ): Promise<T> {
   callerSignal.throwIfAborted();
   const url = parseMcpUrl(endpoint);
+  if (authorization && (
+    url.href !== SCHEDULER_MCP_URL ||
+    !/^[A-Za-z0-9_-]{32,256}$/.test(authorization.token) ||
+    !Number.isSafeInteger(authorization.profileId) || authorization.profileId <= 0
+  )) {
+    throw new McpValidationError("Учётные данные планировщика допустимы только для собственного защищённого endpoint и профиля.");
+  }
   const dispatcher = createMcpDispatcher(url);
   const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(MCP_TOOL_CHAT_LIMITS.timeoutMs)]);
   let terminating = false;
   const transport = new StreamableHTTPClientTransport(url, {
+    ...(authorization ? {
+      requestInit: { headers: {
+        Authorization: `Bearer ${authorization.token}`,
+        "X-Flash-Profile-Id": String(authorization.profileId),
+      } },
+    } : {}),
     async fetch(input, init) {
       if (new URL(input).href !== url.href) {
         throw new McpValidationError("MCP-сервер попытался изменить адрес подключения.");
