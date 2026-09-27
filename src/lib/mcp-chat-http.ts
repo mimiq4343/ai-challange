@@ -10,11 +10,12 @@ import { McpToolChatAgent } from "./mcp-tool-chat-agent";
 import { PersonalizedChatAgent } from "./personalized-chat-agent";
 import { getProfileStore } from "./profile-store";
 import { SCHEDULER_MCP_URL } from "./scheduler-config";
+import { PIPELINE_MCP_URL } from "./pipeline-config";
 import { ContextLimitError } from "./token-counter";
 
 export type McpRouteContext = { params: Promise<{ id: string }> };
 
-export async function handleMcpChat(request: Request, context: McpRouteContext, scheduler = false) {
+export async function handleMcpChat(request: Request, context: McpRouteContext, mode: "repository" | "scheduler" | "pipeline" = "repository") {
   const rejected = validateMcpMutation(request);
   if (rejected) return rejected;
   const body = await readMcpObjectBody(request);
@@ -32,7 +33,7 @@ export async function handleMcpChat(request: Request, context: McpRouteContext, 
     return Response.json({ error: "Диалог не найден." }, { status: 404 });
   }
   const profile = getProfileStore().getActiveProfile();
-  if (!scheduler && !getMcpServerStore().listServers(profile.id).some(({ url }) => url === MCP_PUBLIC_URL)) {
+  if (mode === "repository" && !getMcpServerStore().listServers(profile.id).some(({ url }) => url === MCP_PUBLIC_URL)) {
     return Response.json(
       { error: `Добавьте MCP-сервер ${MCP_PUBLIC_URL} в панели агента.` },
       { status: 409 },
@@ -53,12 +54,12 @@ export async function handleMcpChat(request: Request, context: McpRouteContext, 
         try {
           signal.throwIfAborted();
           const llm = McpToolChatAgent.fromEnvironment({
-            endpoint: scheduler ? SCHEDULER_MCP_URL : MCP_PUBLIC_URL,
+            endpoint: mode === "pipeline" ? PIPELINE_MCP_URL : mode === "scheduler" ? SCHEDULER_MCP_URL : MCP_PUBLIC_URL,
             onToolEvent: send,
-            ...(scheduler ? { schedulerProfileId: profile.id } : {}),
+            access: mode === "repository" ? { kind: mode } : { kind: mode, profileId: profile.id },
           });
           const agent = PersonalizedChatAgent.fromEnvironment({ taskState: true, invariants: true }, llm);
-          // Guard применяется до LLM/MCP; режим планировщика не обходит инварианты.
+          // Guard применяется до LLM/MCP во всех режимах, включая пайплайн.
           const response = await agent.respond(id, content, layers, signal);
           send({ type: "metadata", headers: memoryResponseHeaders(response) });
           reader = response.stream.getReader();
@@ -80,9 +81,11 @@ export async function handleMcpChat(request: Request, context: McpRouteContext, 
             const expected = error instanceof ChatAgentError || error instanceof McpConnectionError || error instanceof ContextLimitError;
             if (!expected) console.error("Ошибка MCP-чата.", { conversationId: id, error: error instanceof Error ? error.name : "UnknownError" });
             const message = expected ? error.message : "Не удалось завершить ответ агента с MCP.";
-            send({ type: "error", message: scheduler
+            send({ type: "error", message: mode === "scheduler"
               ? `${message} Уже выполненные операции с расписаниями сохраняются. Проверьте список заданий перед повтором.`
-              : message });
+              : mode === "pipeline"
+                ? `${message} Уже сохранённые файлы остаются в списке отчётов.`
+                : message });
           }
           abort.abort(error);
         } finally {

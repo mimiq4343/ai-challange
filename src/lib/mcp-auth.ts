@@ -1,16 +1,16 @@
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 
-type SchedulerAuthorization =
+type McpAuthorization =
   | { status: 200; profileId: number }
   | { status: 400 | 401 | 503; message: string };
 
-export function authorizeSchedulerRequest(
+export function authorizeMcpRequest(
   headers: IncomingHttpHeaders,
   expectedToken: string | undefined,
-): SchedulerAuthorization {
+): McpAuthorization {
   if (!expectedToken || !/^[A-Za-z0-9_-]{32,256}$/.test(expectedToken)) {
-    return { status: 503, message: "Scheduler credentials are not configured" };
+    return { status: 503, message: "MCP credentials are not configured" };
   }
   const authorization = headers.authorization;
   const expected = Buffer.from(`Bearer ${expectedToken}`);

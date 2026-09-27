@@ -4,10 +4,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 import { MCP_PUBLIC_URL, MCP_SERVER_RESPONSE_TIMEOUT_MS } from "../src/lib/mcp-config";
 import { createDemoMcpServer } from "../src/lib/mcp-demo-server";
-import { authorizeSchedulerRequest } from "../src/lib/scheduler-auth";
+import { authorizeMcpRequest } from "../src/lib/mcp-auth";
 import { SCHEDULER_MCP_URL } from "../src/lib/scheduler-config";
 import { createSchedulerMcpServer } from "../src/lib/scheduler-mcp-server";
 import { getProfileStore } from "../src/lib/profile-store";
+import { PIPELINE_LIMITS, PIPELINE_MCP_URL } from "../src/lib/pipeline-config";
+import { createPipelineMcpServer } from "../src/lib/pipeline-mcp-server";
 
 const host = process.env.MCP_HOST ?? "127.0.0.1";
 const port = Number(process.env.MCP_PORT ?? "3001");
@@ -16,6 +18,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 const publicUrl = new URL(MCP_PUBLIC_URL);
 const schedulerPath = new URL(SCHEDULER_MCP_URL).pathname;
+const pipelinePath = new URL(PIPELINE_MCP_URL).pathname;
 const allowedHosts = [publicUrl.host, `127.0.0.1:${port}`, `localhost:${port}`];
 
 const httpServer = createServer(async (request, response) => {
@@ -25,7 +28,7 @@ const httpServer = createServer(async (request, response) => {
     response.writeHead(403).end("Forbidden");
     return;
   }
-  if (request.url !== publicUrl.pathname && request.url !== schedulerPath) {
+  if (request.url !== publicUrl.pathname && request.url !== schedulerPath && request.url !== pipelinePath) {
     response.writeHead(404).end("Not found");
     return;
   }
@@ -36,8 +39,9 @@ const httpServer = createServer(async (request, response) => {
 
   let server;
   try {
-    if (request.url === schedulerPath) {
-      const authorization = authorizeSchedulerRequest(request.headers, process.env.MCP_SCHEDULER_TOKEN);
+    if (request.url === schedulerPath || request.url === pipelinePath) {
+      const token = request.url === pipelinePath ? process.env.MCP_PIPELINE_TOKEN : process.env.MCP_SCHEDULER_TOKEN;
+      const authorization = authorizeMcpRequest(request.headers, token);
       if (authorization.status !== 200) {
         response.writeHead(authorization.status, { "Content-Type": "text/plain" }).end(authorization.message);
         return;
@@ -46,7 +50,9 @@ const httpServer = createServer(async (request, response) => {
         response.writeHead(404).end("Profile not found");
         return;
       }
-      server = createSchedulerMcpServer(authorization.profileId);
+      server = request.url === pipelinePath
+        ? createPipelineMcpServer(authorization.profileId)
+        : createSchedulerMcpServer(authorization.profileId);
     } else {
       server = createDemoMcpServer();
     }
@@ -65,7 +71,7 @@ const httpServer = createServer(async (request, response) => {
   const deadline = setTimeout(() => {
     if (!response.headersSent) response.writeHead(504).end("MCP response timeout");
     else response.destroy();
-  }, MCP_SERVER_RESPONSE_TIMEOUT_MS);
+  }, request.url === pipelinePath ? PIPELINE_LIMITS.toolTimeoutMs : MCP_SERVER_RESPONSE_TIMEOUT_MS);
   try {
     // Отменённый JSON-RPC запрос может не получить ответа от SDK. Разрыв
     // соединения и абсолютный deadline также должны завершать HTTP-обработчик.
@@ -76,7 +82,7 @@ const httpServer = createServer(async (request, response) => {
   } catch (error) {
     console.error("mcp_request_failed", {
       method: request.method,
-      path: publicUrl.pathname,
+      path: request.url,
       error: error instanceof Error ? error.name : "UnknownError",
     });
     if (!response.headersSent) {

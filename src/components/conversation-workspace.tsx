@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ListIcon,
   LightningIcon,
@@ -33,7 +34,8 @@ export type ConversationMessageRoute =
   | "task-messages"
   | "invariant-messages"
   | "mcp-messages"
-  | "scheduled-messages";
+  | "scheduled-messages"
+  | "pipeline-messages";
 
 export type ConversationWorkspaceEvents = {
   onConversationChange?: (conversationId: string | null) => void;
@@ -125,6 +127,7 @@ export function ConversationWorkspace({
   messageTokenBadges,
   examplePrompts = EXAMPLE_PROMPTS,
 }: ConversationWorkspaceProps) {
+  const router = useRouter();
   const [conversations, setConversations] = useState(initialConversations);
   const [activeId, setActiveId] = useState(initialDetail?.conversation.id ?? null);
   const [messages, setMessages] = useState<UiMessage[]>(
@@ -343,7 +346,7 @@ export function ConversationWorkspace({
         );
       }
 
-      if (messageRoute === "mcp-messages" || messageRoute === "scheduled-messages") {
+      if (messageRoute === "mcp-messages" || messageRoute === "scheduled-messages" || messageRoute === "pipeline-messages") {
         await consumeMcpChatStream(response.body, (event) => {
           if (event.type === "metadata") {
             applyHeaders(new Headers(event.headers));
@@ -394,6 +397,7 @@ export function ConversationWorkspace({
     } finally {
       setStreaming(false);
       abortRef.current = null;
+      if (messageRoute === "pipeline-messages") router.refresh();
     }
   }
 

@@ -52,6 +52,8 @@ export type ChatAgentResponse = {
 export type ChatRequestOptions = {
   systemMessages?: readonly string[];
   maxOutputTokens?: number;
+  /** Ошибка формата SSE или UTF-8 прерывает ответ вместо пропуска повреждённого текста. */
+  strictStream?: boolean;
 };
 
 export type ExchangeUsageInput = TokenBreakdown & {
