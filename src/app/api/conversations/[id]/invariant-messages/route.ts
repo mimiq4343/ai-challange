@@ -1,6 +1,6 @@
 import { ChatAgentError } from "@/lib/chat-agent";
 import { ConversationNotFoundError } from "@/lib/conversation-store";
-import { ALL_MEMORY_LAYERS_ENABLED, type MemoryLayerToggles } from "@/lib/memory-types";
+import { memoryResponseHeaders, parseMemoryLayers } from "@/lib/memory-chat-http";
 import { PersonalizedChatAgent } from "@/lib/personalized-chat-agent";
 import { ContextLimitError } from "@/lib/token-counter";
 
@@ -8,30 +8,6 @@ export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-function parseLayers(value: unknown): MemoryLayerToggles | null {
-  if (value === undefined) return ALL_MEMORY_LAYERS_ENABLED;
-  if (typeof value !== "object" || value === null) return null;
-
-  const candidate = value as Record<string, unknown>;
-  const toggles = [
-    "shortTerm",
-    "working",
-    "longTerm",
-    "profile",
-    "task",
-    "invariants",
-  ] as const;
-  if (toggles.some((name) => typeof candidate[name] !== "boolean")) return null;
-
-  return {
-    shortTerm: candidate.shortTerm as boolean,
-    working: candidate.working as boolean,
-    longTerm: candidate.longTerm as boolean,
-    profile: candidate.profile as boolean,
-    task: candidate.task as boolean,
-    invariants: candidate.invariants as boolean,
-  };
-}
 
 export async function POST(request: Request, context: RouteContext) {
   const { id } = await context.params;
@@ -48,7 +24,7 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json({ error: "Ожидается непустая строка content." }, { status: 400 });
   }
 
-  const layers = parseLayers(body.layers);
+  const layers = parseMemoryLayers(body.layers);
   if (!layers) {
     return Response.json(
       {
@@ -69,29 +45,13 @@ export async function POST(request: Request, context: RouteContext) {
       layers,
       request.signal,
     );
-    const { layerTokens } = response;
 
     return new Response(response.stream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
-        "X-Token-System": String(layerTokens.systemTokens),
-        "X-Token-History": String(layerTokens.shortTermTokens),
-        "X-Token-Request": String(layerTokens.requestTokens),
-        "X-Token-Prompt": String(layerTokens.promptTokens),
-        "X-Token-Reserved-Output": String(layerTokens.reservedOutputTokens),
-        "X-Token-Context": String(layerTokens.contextTokens),
-        "X-Token-Limit": String(layerTokens.contextLimit),
-        "X-Memory-Ltm": String(layerTokens.longTermTokens),
-        "X-Memory-Wm": String(layerTokens.workingTokens),
-        "X-Memory-Stm": String(layerTokens.shortTermTokens),
-        "X-Memory-Prof": String(layerTokens.profileTokens),
-        "X-Memory-Task": String(layerTokens.taskTokens),
-        "X-Memory-Inv": String(layerTokens.invariantTokens),
-        "X-Invariant-Block": response.blockedBy.join(","),
-        "X-Memory-Stm-Messages": String(response.shortTermMessages),
-        "X-Memory-Profile": String(response.profile.id),
+        ...memoryResponseHeaders(response),
       },
     });
   } catch (error) {

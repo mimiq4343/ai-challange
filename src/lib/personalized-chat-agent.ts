@@ -94,6 +94,7 @@ export class PersonalizedChatAgent {
 
   static fromEnvironment(
     options: PersonalizedAgentOptions = {},
+    llm?: LlmResponder,
   ): PersonalizedChatAgent {
     return new PersonalizedChatAgent(
       getConversationStore(),
@@ -101,7 +102,7 @@ export class PersonalizedChatAgent {
       getProfileStore(),
       getTaskStore(),
       getInvariantStore(),
-      ChatAgent.fromEnvironment(),
+      llm ?? ChatAgent.fromEnvironment(),
       ProviderMemoryRouterLlm.fromEnvironment(),
       options,
     );

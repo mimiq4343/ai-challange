@@ -10,6 +10,8 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ConversationSidebar } from "@/components/conversation-sidebar";
+import { McpToolCard, type McpToolTrace } from "@/components/mcp-tool-card";
+import { consumeMcpChatStream } from "@/lib/mcp-chat-stream";
 import type {
   ConversationDetail,
   ConversationSummary,
@@ -29,7 +31,8 @@ export type ConversationMessageRoute =
   | "memory-messages"
   | "personalized-messages"
   | "task-messages"
-  | "invariant-messages";
+  | "invariant-messages"
+  | "mcp-messages";
 
 export type ConversationWorkspaceEvents = {
   onConversationChange?: (conversationId: string | null) => void;
@@ -48,12 +51,14 @@ type ConversationWorkspaceProps = {
   requestBodyExtra?: Record<string, unknown>;
   inputFooter?: React.ReactNode;
   messageTokenBadges?: readonly MessageTokenBadge[];
+  examplePrompts?: readonly string[];
 };
 
 type UiMessage = {
   id: string;
   role: MessageRole;
   content: string;
+  toolCalls?: McpToolTrace[];
 };
 
 const EXAMPLE_PROMPTS = [
@@ -117,6 +122,7 @@ export function ConversationWorkspace({
   requestBodyExtra,
   inputFooter,
   messageTokenBadges,
+  examplePrompts = EXAMPLE_PROMPTS,
 }: ConversationWorkspaceProps) {
   const [conversations, setConversations] = useState(initialConversations);
   const [activeId, setActiveId] = useState(initialDetail?.conversation.id ?? null);
@@ -298,7 +304,7 @@ export function ConversationWorkspace({
       }
 
       setMessages((current) => [
-        ...current,
+        ...current.map((message) => ({ ...message, toolCalls: undefined })),
         { id: userId, role: "user", content },
         { id: assistantId, role: "assistant", content: "" },
       ]);
@@ -320,18 +326,13 @@ export function ConversationWorkspace({
             : `Сервер вернул ${response.status}.`,
         );
       }
-      events?.onResponseHeaders?.(conversationId, response.headers);
-
-      events?.onResponseHeaders?.(conversationId, response.headers);
-      const preview = readTokenBreakdown(response.headers);
-      if (preview) events?.onUsagePreview?.(conversationId, preview);
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const delta = decoder.decode(value, { stream: true });
+      const targetId = conversationId;
+      function applyHeaders(headers: Headers) {
+        events?.onResponseHeaders?.(targetId, headers);
+        const preview = readTokenBreakdown(headers);
+        if (preview) events?.onUsagePreview?.(targetId, preview);
+      }
+      function appendDelta(delta: string) {
         setMessages((current) =>
           current.map((message) =>
             message.id === assistantId
@@ -340,19 +341,47 @@ export function ConversationWorkspace({
           ),
         );
       }
-      const finalDelta = decoder.decode();
-      if (finalDelta) {
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === assistantId
-              ? { ...message, content: message.content + finalDelta }
-              : message,
-          ),
-        );
+
+      if (messageRoute === "mcp-messages") {
+        await consumeMcpChatStream(response.body, (event) => {
+          if (event.type === "metadata") {
+            applyHeaders(new Headers(event.headers));
+          } else if (event.type === "text") {
+            appendDelta(event.delta);
+          } else if (event.type === "tool-start" || event.type === "tool-result") {
+            setMessages((current) => current.map((message) => {
+              if (message.id !== assistantId) return message;
+              const toolCalls = message.toolCalls ?? [];
+              return {
+                ...message,
+                toolCalls: event.type === "tool-start"
+                  ? [...toolCalls, { callId: event.callId, name: event.name, arguments: event.arguments }]
+                  : toolCalls.map((trace) => trace.callId === event.callId ? { ...trace, result: event.result } : trace),
+              };
+            }));
+          }
+        });
+      } else {
+        applyHeaders(response.headers);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          appendDelta(decoder.decode(value, { stream: true }));
+        }
+        const finalDelta = decoder.decode();
+        if (finalDelta) appendDelta(finalDelta);
       }
-      await refreshConversations();
       events?.onExchangeComplete?.(conversationId);
+      try {
+        await refreshConversations();
+      } catch (refreshError) {
+        const detail = refreshError instanceof Error ? refreshError.message : "Список диалогов недоступен.";
+        setError(`Ответ сохранён, но список диалогов не обновился. ${detail}`);
+      }
     } catch (actionError) {
+      setMessages((current) => current.filter((message) => message.id !== userId && message.id !== assistantId));
       if (!(actionError instanceof DOMException && actionError.name === "AbortError")) {
         setInput(content);
         setError(describeSendError(actionError));
@@ -436,7 +465,7 @@ export function ConversationWorkspace({
                   <p className="mt-1 text-sm text-muted">История сохранится в SQLite автоматически</p>
                 </div>
                 <div className="flex max-w-2xl flex-wrap justify-center gap-2">
-                  {EXAMPLE_PROMPTS.map((prompt) => (
+                  {examplePrompts.map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
@@ -468,7 +497,10 @@ export function ConversationWorkspace({
                 }
 
                 return (
-                  <div key={message.id} className="flex flex-col items-start gap-1">
+                  <div key={message.id} className="flex min-w-0 flex-col items-start gap-2">
+                    {message.toolCalls?.map((trace) => (
+                      <McpToolCard key={trace.callId} trace={trace} />
+                    ))}
                     <div className="chat-md max-w-[92%] text-sm leading-relaxed">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                       {streaming && message.id === messages.at(-1)?.id && (
