@@ -14,7 +14,7 @@ Snapshot: 2026-09-27.
 - Branch `day-16` is created from `main`, adds persistent MCP server configurations, live tool discovery and a collapsible agent inspector, and is merged back into `main`.
 - Branch `day-17` adds real GitHub MCP tool calls selected by DeepSeek, guarded execution and visible tool results; it is merged into `main`. See [Day 17](day-17.md).
 - Branch `day-18` adds profile-scoped SQLite schedules, an independent summary worker and npm-based systemd supervision; it is merged into `main`. See [Day 18](day-18.md).
-- Branch `day-19` adds an automatic GitHub search, DeepSeek review and exact Markdown-file pipeline through three MCP tools; it remains separate from `main`. See [Day 19](day-19.md).
+- Branch `day-19` adds an automatic GitHub search, DeepSeek review and exact Markdown-file pipeline through three MCP tools; it is merged into `main`. See [Day 19](day-19.md).
 - Stack: Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4, Node.js `>=22.13.0`.
 - The user interface and the user-facing documentation are written in Russian and use the Flash Chat visual system.
 - Secrets live only in `.env.local`. That file is never committed.

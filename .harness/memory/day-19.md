@@ -5,8 +5,10 @@ Snapshot: 2026-09-27.
 - The user approved a GitHub repository search, DeepSeek metadata review and
   downloadable Markdown report, in one automatic three-tool chat request.
   Design and plan stayed in chat. `day-19` branched from `main` at `716f354`;
-  merging Day 19 has not been approved. README in `main` documents the branch
-  separately without importing its application code.
+  on 2026-09-28 the user approved the merge and `main` received it as `284c4cf`.
+- The shared `SiteHeader` replaced its overflowing row of day links with the
+  client-side [`DayNavMenu`](../../src/components/day-nav-menu.tsx) disclosure;
+  its range is `FIRST_DAY`..`LAST_DAY`, so a new day bumps `LAST_DAY`.
 - `/day-19` reuses `Day15Workspace`, existing memory/task/invariant behavior,
   streaming tool cards and the collapsible inspector. Reports survive reload;
   their panel refreshes after a request, on window focus and explicitly.
