@@ -1,22 +1,6 @@
 import Link from "next/link";
 
-const NAV_LINKS = [
-  { href: "/#features", label: "Возможности" },
-  { href: "/day-5", label: "Day 5" },
-  { href: "/day-6", label: "Day 6" },
-  { href: "/day-7", label: "Day 7" },
-  { href: "/day-8", label: "Day 8" },
-  { href: "/day-9", label: "Day 9" },
-  { href: "/day-10", label: "Day 10" },
-  { href: "/day-11", label: "Day 11" },
-  { href: "/day-12", label: "Day 12" },
-  { href: "/day-13", label: "Day 13" },
-  { href: "/day-14", label: "Day 14" },
-  { href: "/day-15", label: "Day 15" },
-  { href: "/day-16", label: "Day 16" },
-  { href: "/day-17", label: "Day 17" },
-  { href: "/day-18", label: "Day 18" },
-];
+import { DayNavMenu } from "@/components/day-nav-menu";
 
 export function SiteHeader() {
   return (
@@ -27,16 +11,14 @@ export function SiteHeader() {
         </span>
         Flash Chat
       </Link>
-      <nav className="flex max-w-[68vw] items-center gap-2 overflow-x-auto text-sm text-muted sm:gap-4 lg:gap-6">
-        {NAV_LINKS.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className={`${link.href === "/#features" ? "hidden md:inline-flex" : "inline-flex"} min-h-11 min-w-11 items-center justify-center transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
-          >
-            {link.label}
-          </Link>
-        ))}
+      <nav aria-label="Основная навигация" className="flex items-center gap-2 text-sm text-muted sm:gap-4">
+        <Link
+          href="/#features"
+          className="hidden min-h-11 min-w-11 items-center justify-center transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent md:inline-flex"
+        >
+          Возможности
+        </Link>
+        <DayNavMenu />
       </nav>
     </header>
   );

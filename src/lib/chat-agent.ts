@@ -1,3 +1,4 @@
+import * as z from "zod/v4";
 import type {
   ChatAgentResponse,
   ChatRequestOptions,
@@ -44,6 +45,14 @@ type ProviderEvent = {
   };
 };
 
+const strictProviderEvent = z.object({
+  choices: z.array(z.object({
+    delta: z.object({ content: z.string().nullable().optional() }).optional(),
+    finish_reason: z.string().nullable().optional(),
+  })).max(1),
+  usage: z.unknown().optional(),
+});
+
 function optionalTokenCount(value: unknown): number | null | undefined {
   if (value === undefined || value === null) return null;
   if (!Number.isSafeInteger(value) || (value as number) < 0) return undefined;
@@ -86,8 +95,9 @@ export function parseProviderUsage(
 
 export function sseToChatResponse(
   body: ReadableStream<Uint8Array>,
+  strict = false,
 ): ChatAgentResponse {
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8", { fatal: strict });
   const encoder = new TextEncoder();
   let buffer = "";
   let finalUsage: ProviderTokenUsage | null = null;
@@ -108,8 +118,10 @@ export function sseToChatResponse(
 
     let event: ProviderEvent;
     try {
-      event = JSON.parse(data) as ProviderEvent;
-    } catch {
+      const parsed: unknown = JSON.parse(data);
+      event = (strict ? strictProviderEvent.parse(parsed) : parsed) as ProviderEvent;
+    } catch (cause) {
+      if (strict) throw new ChatAgentError("API вернул повреждённое событие SSE.", "upstream", { cause });
       return;
     }
 
@@ -128,16 +140,28 @@ export function sseToChatResponse(
   const stream = body.pipeThrough(
     new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
-        buffer += decoder.decode(chunk, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) processLine(line, controller);
+        try {
+          buffer += decoder.decode(chunk, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) processLine(line, controller);
+        } catch (cause) {
+          resolveUsage(null);
+          resolveFinishReason(null);
+          throw cause;
+        }
       },
       flush(controller) {
-        buffer += decoder.decode();
-        if (buffer) processLine(buffer, controller);
-        resolveUsage(finalUsage);
-        resolveFinishReason(finishReason);
+        try {
+          buffer += decoder.decode();
+          if (buffer) processLine(buffer, controller);
+          resolveUsage(finalUsage);
+          resolveFinishReason(finishReason);
+        } catch (cause) {
+          resolveUsage(null);
+          resolveFinishReason(null);
+          throw cause;
+        }
       },
     }),
   );
@@ -245,6 +269,6 @@ export class ChatAgent {
       );
     }
 
-    return sseToChatResponse(response.body);
+    return sseToChatResponse(response.body, options?.strictStream);
   }
 }

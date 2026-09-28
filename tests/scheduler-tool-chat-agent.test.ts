@@ -35,7 +35,7 @@ function selection(calls: Call[], round = 1): Response {
 }
 function answer(): Response { return sse({ content: "Мониторинг остановлен после получения сводки." }, "stop"); }
 function agent(events: McpToolEvent[] = []) {
-  return McpToolChatAgent.fromEnvironment({ endpoint: SCHEDULER_MCP_URL, schedulerProfileId: 7, onToolEvent: (event) => events.push(event) }, env);
+  return McpToolChatAgent.fromEnvironment({ endpoint: SCHEDULER_MCP_URL, access: { kind: "scheduler", profileId: 7 }, onToolEvent: (event) => events.push(event) }, env);
 }
 function boundary(
   provider: (request: ProviderRequest, round: number) => Response | Promise<Response>,
@@ -140,20 +140,20 @@ for (const discovered of [tools.slice(1), [...tools, tools[0]]]) {
 for (const endpoint of [MCP_PUBLIC_URL, "https://foreign.example/mcp/scheduler", `${SCHEDULER_MCP_URL}/`, `${SCHEDULER_MCP_URL}?token=secret`, "https://mcp.yees.ai:443/mcp/scheduler"]) {
   test(`scheduler refuses non-exact endpoint before exposing credentials: ${endpoint}`, () => {
     const { lifecycle } = boundary(() => answer());
-    assert.throws(() => McpToolChatAgent.fromEnvironment({ endpoint, schedulerProfileId: 7, onToolEvent() {} }, env));
+    assert.throws(() => McpToolChatAgent.fromEnvironment({ endpoint, access: { kind: "scheduler", profileId: 7 }, onToolEvent() {} }, env));
     assert.deepEqual(lifecycle, []);
   });
 }
 
-for (const schedulerProfileId of [0, -1, 1.5, Number.NaN]) {
-  test(`scheduler rejects invalid trusted profile: ${schedulerProfileId}`, () => {
-    assert.throws(() => McpToolChatAgent.fromEnvironment({ endpoint: SCHEDULER_MCP_URL, schedulerProfileId, onToolEvent() {} }, env));
+for (const profileId of [0, -1, 1.5, Number.NaN]) {
+  test(`scheduler rejects invalid trusted profile: ${profileId}`, () => {
+    assert.throws(() => McpToolChatAgent.fromEnvironment({ endpoint: SCHEDULER_MCP_URL, access: { kind: "scheduler", profileId }, onToolEvent() {} }, env));
   });
 }
 
 test("scheduler rejects missing token before opening either network connection", () => {
   const { requests, lifecycle } = boundary(() => answer());
-  assert.throws(() => McpToolChatAgent.fromEnvironment({ endpoint: SCHEDULER_MCP_URL, schedulerProfileId: 7, onToolEvent() {} }, { ...env, MCP_SCHEDULER_TOKEN: " " }));
+  assert.throws(() => McpToolChatAgent.fromEnvironment({ endpoint: SCHEDULER_MCP_URL, access: { kind: "scheduler", profileId: 7 }, onToolEvent() {} }, { ...env, MCP_SCHEDULER_TOKEN: " " }));
   assert.deepEqual(requests, []);
   assert.deepEqual(lifecycle, []);
 });

@@ -17,6 +17,8 @@ Day 17 decisions are recorded in [`memory/day-17.md`](memory/day-17.md); its
 GitHub tool and agent integration were also approved in chat.
 Day 18 decisions are recorded in [`memory/day-18.md`](memory/day-18.md); the user
 approved background GitHub monitoring and systemd supervision in chat.
+Day 19 decisions are recorded in [`memory/day-19.md`](memory/day-19.md); the user
+approved the search, summary and Markdown-save pipeline in chat.
 
 ## Superpowers designs
 
@@ -52,7 +54,7 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 - Day 11 was developed on a branch created from `day-8`; after the merge `main`
   carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main` and
   was merged back; Day 13 through Day 18 followed the same route, so `main` now
-  carries days 1–18.
+  carries days 1–18. Day 19 remains on its own branch until integration approval.
 - Reports belong in topical subdirectories of `reports/`, historical material in
   `archive/`; create either directory only when there is material for it.
 - This repository has no `openspec/` directory, so OpenSpec artifacts and steps do

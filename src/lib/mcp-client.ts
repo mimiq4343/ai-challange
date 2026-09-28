@@ -11,6 +11,7 @@ import { MCP_DISCOVERY_TIMEOUT_MS, MCP_MAX_RESPONSE_BYTES, MCP_MAX_TOOL_PAGES, M
 import { createMcpDispatcher, limitMcpResponse, McpValidationError, parseMcpUrl } from "./mcp-network";
 import type { McpDiscoveryResult, McpTool } from "./mcp-types";
 import { SCHEDULER_MCP_URL } from "./scheduler-config";
+import { PIPELINE_LIMITS, PIPELINE_MCP_URL } from "./pipeline-config";
 
 export class McpConnectionError extends Error {
   constructor(message: string, readonly status: number, options?: ErrorOptions) {
@@ -33,11 +34,11 @@ export async function withMcpTools<T>(
   callerSignal.throwIfAborted();
   const url = parseMcpUrl(endpoint);
   if (authorization && (
-    url.href !== SCHEDULER_MCP_URL ||
+    (endpoint !== SCHEDULER_MCP_URL && endpoint !== PIPELINE_MCP_URL) ||
     !/^[A-Za-z0-9_-]{32,256}$/.test(authorization.token) ||
     !Number.isSafeInteger(authorization.profileId) || authorization.profileId <= 0
   )) {
-    throw new McpValidationError("Учётные данные планировщика допустимы только для собственного защищённого endpoint и профиля.");
+    throw new McpValidationError("Учётные данные MCP допустимы только для собственного защищённого endpoint и профиля.");
   }
   const dispatcher = createMcpDispatcher(url);
   const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(MCP_TOOL_CHAT_LIMITS.timeoutMs)]);
@@ -53,6 +54,9 @@ export async function withMcpTools<T>(
       if (new URL(input).href !== url.href) {
         throw new McpValidationError("MCP-сервер попытался изменить адрес подключения.");
       }
+      const pipelineCall = url.href === PIPELINE_MCP_URL && init?.method === "POST"
+        && typeof init.body === "string" && JSON.parse(init.body).method === "tools/call";
+      const timeout = pipelineCall ? PIPELINE_LIMITS.toolTimeoutMs : MCP_DISCOVERY_TIMEOUT_MS;
       const options: RequestInit & { dispatcher: Dispatcher } = {
         ...init,
         dispatcher,
@@ -60,7 +64,7 @@ export async function withMcpTools<T>(
         credentials: "omit",
         signal: terminating
           ? AbortSignal.timeout(MCP_SESSION_CLEANUP_TIMEOUT_MS)
-          : AbortSignal.any([signal, AbortSignal.timeout(MCP_DISCOVERY_TIMEOUT_MS), ...(init?.signal ? [init.signal] : [])]),
+          : AbortSignal.any([signal, AbortSignal.timeout(timeout), ...(init?.signal ? [init.signal] : [])]),
       };
       return limitMcpResponse(await fetch(input, options));
     },
@@ -142,7 +146,8 @@ export async function withMcpTools<T>(
         const tool = metadata.get(name);
         if (!tool) throw new McpConnectionError("MCP-инструмент отсутствует в списке сервера.", 502);
         if (tool.taskRequired) throw new McpConnectionError("MCP-инструмент требует неподдерживаемое выполнение через tasks.", 502);
-        const output = await client.callTool({ name, arguments: args }, CallToolResultSchema, requestOptions) as CallToolResult;
+        const timeout = url.href === PIPELINE_MCP_URL ? PIPELINE_LIMITS.toolTimeoutMs : MCP_DISCOVERY_TIMEOUT_MS;
+        const output = await client.callTool({ name, arguments: args }, CallToolResultSchema, { signal, timeout }) as CallToolResult;
         if (tool.validate) {
           if (!output.structuredContent && !output.isError) {
             throw new McpConnectionError("MCP-инструмент не вернул обязательный структурированный результат.", 502);

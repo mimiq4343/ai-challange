@@ -47,3 +47,6 @@ next-env.d.ts
 data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
+
+# Markdown-отчёты MCP-пайплайна Day 19
+data/reports/
