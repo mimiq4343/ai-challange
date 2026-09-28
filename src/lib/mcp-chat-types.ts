@@ -4,8 +4,11 @@ export type McpToolResult = {
   isError: boolean;
 };
 
+/** Сервер, на который маршрутизирован вызов; есть только в режиме оркестрации. */
+export type McpToolServer = { id: string; name: string };
+
 export type McpToolEvent =
-  | { type: "tool-start"; callId: string; name: string; arguments: Record<string, unknown> }
+  | { type: "tool-start"; callId: string; name: string; arguments: Record<string, unknown>; server?: McpToolServer }
   | { type: "tool-result"; callId: string; result: McpToolResult };
 
 export type McpChatEvent =

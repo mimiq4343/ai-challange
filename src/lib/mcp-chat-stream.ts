@@ -12,6 +12,7 @@ const mcpChatEventSchema: z.ZodType<McpChatEvent> = z.discriminatedUnion("type",
     callId: z.string(),
     name: z.string(),
     arguments: z.record(z.string(), z.unknown()),
+    server: z.object({ id: z.string(), name: z.string() }).optional(),
   }),
   z.object({
     type: z.literal("tool-result"),

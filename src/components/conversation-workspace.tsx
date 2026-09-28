@@ -35,7 +35,15 @@ export type ConversationMessageRoute =
   | "invariant-messages"
   | "mcp-messages"
   | "scheduled-messages"
-  | "pipeline-messages";
+  | "pipeline-messages"
+  | "orchestrated-messages";
+
+// Эти маршруты отвечают NDJSON-событиями MCP вместо простого текстового потока.
+const MCP_EVENT_ROUTES: ReadonlySet<ConversationMessageRoute> = new Set([
+  "mcp-messages", "scheduled-messages", "pipeline-messages", "orchestrated-messages",
+]);
+// После этих маршрутов серверные панели страницы (отчёты, маршрут) перечитываются.
+const REFRESHING_ROUTES: ReadonlySet<ConversationMessageRoute> = new Set(["pipeline-messages", "orchestrated-messages"]);
 
 export type ConversationWorkspaceEvents = {
   onConversationChange?: (conversationId: string | null) => void;
@@ -346,7 +354,7 @@ export function ConversationWorkspace({
         );
       }
 
-      if (messageRoute === "mcp-messages" || messageRoute === "scheduled-messages" || messageRoute === "pipeline-messages") {
+      if (MCP_EVENT_ROUTES.has(messageRoute)) {
         await consumeMcpChatStream(response.body, (event) => {
           if (event.type === "metadata") {
             applyHeaders(new Headers(event.headers));
@@ -359,7 +367,7 @@ export function ConversationWorkspace({
               return {
                 ...message,
                 toolCalls: event.type === "tool-start"
-                  ? [...toolCalls, { callId: event.callId, name: event.name, arguments: event.arguments }]
+                  ? [...toolCalls, { callId: event.callId, name: event.name, arguments: event.arguments, ...(event.server ? { server: event.server } : {}) }]
                   : toolCalls.map((trace) => trace.callId === event.callId ? { ...trace, result: event.result } : trace),
               };
             }));
@@ -397,7 +405,7 @@ export function ConversationWorkspace({
     } finally {
       setStreaming(false);
       abortRef.current = null;
-      if (messageRoute === "pipeline-messages") router.refresh();
+      if (REFRESHING_ROUTES.has(messageRoute)) router.refresh();
     }
   }
 
