@@ -31,7 +31,7 @@ export class SqliteDocumentStore {
   private readonly database: DatabaseSync;
   private closed = false;
 
-  constructor(private readonly databasePath: string) {
+  constructor(private readonly databasePath: string, private readonly embeddingProfile: { model: string; dimensions: number } = DOCUMENT_INDEX_CONFIG) {
     this.database = openChatDatabase(databasePath);
     try {
       this.database.exec(`
@@ -63,7 +63,7 @@ export class SqliteDocumentStore {
   }
 
   replaceIndex(report: DocumentIndexReport, chunks: readonly EmbeddedChunk[]): void {
-    if (!report.id || report.model !== DOCUMENT_INDEX_CONFIG.model || report.dimensions !== DOCUMENT_INDEX_CONFIG.dimensions || !chunks.length) {
+    if (!report.id || report.model !== this.embeddingProfile.model || report.dimensions !== this.embeddingProfile.dimensions || !chunks.length) {
       throw new Error("Нельзя сохранить неполный индекс документов.");
     }
     for (const strategy of ["fixed", "structural"] as const) {
@@ -144,6 +144,10 @@ export class SqliteDocumentStore {
       validateEmbedding(embedding, row.dimensions);
       return { ...chunkFromRow(row), embedding };
     });
+  }
+
+  readIndexVectors(strategy: ChunkStrategy): { report: DocumentIndexReport | null; chunks: EmbeddedChunk[] } {
+    return this.readSnapshot(() => ({ report: this.latestReport(), chunks: this.readVectors(strategy) }));
   }
 
   close(): void {

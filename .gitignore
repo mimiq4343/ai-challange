@@ -55,3 +55,12 @@ data/reports/
 data/documents-comparison.json
 data/documents-comparison.json.*.tmp
 data/documents-index.lock
+
+# Локальное сравнение RAG Day 22
+data/rag-comparison.json
+data/rag-comparison.json.*.tmp
+data/rag-benchmark.lock
+data/models/
+data/rag-index-comparison.json
+data/rag-index-comparison.json.*.tmp
+data/rag-index.lock
