@@ -1,0 +1,14 @@
+[
+  { "id": "sqlite-wal", "question": "Как настроены внешние ключи и журнал SQLite при открытии базы?", "source": "src/lib/sqlite-database.ts", "section": "openChatDatabase", "evidence": "PRAGMA foreign_keys" },
+  { "id": "sqlite-release", "question": "Когда закрывается общее соединение с базой после освобождения хранилища?", "source": "src/lib/sqlite-database.ts", "section": "releaseChatDatabase", "evidence": "shared.references -= 1" },
+  { "id": "chat-history", "question": "Откуда загружается история диалога перед отправкой нового сообщения модели?", "source": "src/lib/persistent-chat-agent.ts", "section": "PersistentChatAgent.respond", "evidence": ".getMessages(conversationId)" },
+  { "id": "chat-completion", "question": "Как дождаться полного ответа модели перед сохранением пары сообщений?", "source": "src/lib/persistent-chat-agent.ts", "section": "PersistentChatAgent.respond", "evidence": "collectCompletedTextStream(" },
+  { "id": "summary-window", "question": "Как выбираются старые сообщения для сжатия и сохраняется хвост последних сообщений?", "source": "src/lib/history-compression.ts", "section": "selectCompressionWindow", "evidence": "minimumTailStart" },
+  { "id": "summary-request", "question": "Как формируется запрос обновления краткой памяти из прежнего summary и пачки сообщений?", "source": "src/lib/history-compression.ts", "section": "buildSummaryRequest", "evidence": "PREVIOUS SUMMARY" },
+  { "id": "token-count", "question": "Как посчитать токены текста без добавления специальных токенов?", "source": "src/lib/token-counter.ts", "section": "countTextTokens", "evidence": "add_special_tokens: false" },
+  { "id": "task-approval", "question": "Как автомат задачи запрещает реализацию без утверждённого плана?", "source": "src/lib/task-machine.ts", "section": "checkPrecondition", "evidence": "if (!context.planApproved)" },
+  { "id": "task-pause", "question": "Может ли агент менять этап задачи, пока человек поставил её на паузу?", "source": "src/lib/task-machine.ts", "section": "checkTransition", "evidence": "input.paused &&" },
+  { "id": "mcp-auth", "question": "Как проверяется Bearer-токен входящего запроса к MCP без утечки времени сравнения?", "source": "src/lib/mcp-auth.ts", "section": "authorizeMcpRequest", "evidence": "timingSafeEqual(actual" },
+  { "id": "profile-prompt", "question": "Как имя и ограничения пользовательского профиля включаются в системный промпт?", "source": "src/lib/memory-composer.ts", "section": "renderProfileBlock", "evidence": "profile.constraints" },
+  { "id": "github-request", "question": "Как получить свежие сведения о GitHub-репозитории и ограничить время сетевого запроса?", "source": "src/lib/github-repository-tool.ts", "section": "fetchGitHubRepository", "evidence": "GITHUB_TIMEOUT_MS" }
+]

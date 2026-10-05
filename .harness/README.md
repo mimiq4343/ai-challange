@@ -21,6 +21,9 @@ Day 19 decisions are recorded in [`memory/day-19.md`](memory/day-19.md); the use
 approved the search, summary and Markdown-save pipeline in chat.
 Day 20 decisions are recorded in [`memory/day-20.md`](memory/day-20.md); the user
 approved multi-server MCP orchestration with DeepWiki and a code-only registry in chat.
+Day 21 decisions and measured indexing results are recorded in
+[`memory/day-21.md`](memory/day-21.md); the user approved the public corpus,
+free OpenRouter embeddings, SQLite and chunking comparison in chat.
 
 ## Superpowers designs
 

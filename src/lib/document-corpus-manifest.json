@@ -1,0 +1,11 @@
+[
+  "README.md",
+  "src/lib/github-repository-tool.ts",
+  "src/lib/history-compression.ts",
+  "src/lib/mcp-auth.ts",
+  "src/lib/memory-composer.ts",
+  "src/lib/persistent-chat-agent.ts",
+  "src/lib/sqlite-database.ts",
+  "src/lib/task-machine.ts",
+  "src/lib/token-counter.ts"
+]
