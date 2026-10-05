@@ -1,11 +1,13 @@
 import { CaretDownIcon, DownloadSimpleIcon, WrenchIcon } from "@phosphor-icons/react";
 
-import type { McpToolResult } from "@/lib/mcp-chat-types";
+import type { McpToolResult, McpToolServer } from "@/lib/mcp-chat-types";
 
 export type McpToolTrace = {
   callId: string;
   name: string;
   arguments: Record<string, unknown>;
+  /** Сервер маршрута в режиме оркестрации. */
+  server?: McpToolServer;
   result?: McpToolResult;
 };
 
@@ -27,7 +29,14 @@ export function McpToolCard({ trace }: { trace: McpToolTrace }) {
     <details open className="group w-full min-w-0 rounded-xl border border-line bg-background/70 text-xs">
       <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-2 rounded-xl px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
         <WrenchIcon size={16} className="shrink-0 text-accent" aria-hidden />
-        <span className="min-w-0 flex-1 break-all font-mono font-medium">{trace.name}</span>
+        <span className="min-w-0 flex-1 break-all font-mono font-medium">
+          {trace.server && (
+            <span className="mr-2 inline-flex rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 font-sans text-[11px] font-medium text-accent">
+              {trace.server.name}
+            </span>
+          )}
+          {trace.name}
+        </span>
         <span role="status" className={failed ? "text-red-200" : "text-muted"}>{status}</span>
         <CaretDownIcon size={14} className="shrink-0 text-muted transition-transform group-open:rotate-180" aria-hidden />
       </summary>

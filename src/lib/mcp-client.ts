@@ -7,11 +7,19 @@ import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv
 import type { JsonSchemaValidator } from "@modelcontextprotocol/sdk/validation";
 import type { Dispatcher } from "undici";
 
-import { MCP_DISCOVERY_TIMEOUT_MS, MCP_MAX_RESPONSE_BYTES, MCP_MAX_TOOL_PAGES, MCP_SESSION_CLEANUP_TIMEOUT_MS, MCP_TOOL_CHAT_LIMITS } from "./mcp-config";
+import { MCP_DISCOVERY_TIMEOUT_MS, MCP_MAX_RESPONSE_BYTES, MCP_MAX_TOOL_PAGES, MCP_SESSION_CLEANUP_TIMEOUT_MS, MCP_SESSION_TIMEOUT_MS } from "./mcp-config";
 import { createMcpDispatcher, limitMcpResponse, McpValidationError, parseMcpUrl } from "./mcp-network";
 import type { McpDiscoveryResult, McpTool } from "./mcp-types";
 import { SCHEDULER_MCP_URL } from "./scheduler-config";
 import { PIPELINE_LIMITS, PIPELINE_MCP_URL } from "./pipeline-config";
+import { DEEPWIKI_MCP_URL, ORCHESTRATION_LIMITS } from "./orchestration-config";
+
+// Долгие инструменты получают собственный дедлайн вызова; discovery всегда короткий.
+function toolCallTimeoutMs(url: URL): number {
+  if (url.href === PIPELINE_MCP_URL) return PIPELINE_LIMITS.toolTimeoutMs;
+  if (url.href === DEEPWIKI_MCP_URL) return ORCHESTRATION_LIMITS.deepWikiToolTimeoutMs;
+  return MCP_DISCOVERY_TIMEOUT_MS;
+}
 
 export class McpConnectionError extends Error {
   constructor(message: string, readonly status: number, options?: ErrorOptions) {
@@ -41,7 +49,7 @@ export async function withMcpTools<T>(
     throw new McpValidationError("Учётные данные MCP допустимы только для собственного защищённого endpoint и профиля.");
   }
   const dispatcher = createMcpDispatcher(url);
-  const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(MCP_TOOL_CHAT_LIMITS.timeoutMs)]);
+  const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(MCP_SESSION_TIMEOUT_MS)]);
   let terminating = false;
   const transport = new StreamableHTTPClientTransport(url, {
     ...(authorization ? {
@@ -54,9 +62,8 @@ export async function withMcpTools<T>(
       if (new URL(input).href !== url.href) {
         throw new McpValidationError("MCP-сервер попытался изменить адрес подключения.");
       }
-      const pipelineCall = url.href === PIPELINE_MCP_URL && init?.method === "POST"
-        && typeof init.body === "string" && JSON.parse(init.body).method === "tools/call";
-      const timeout = pipelineCall ? PIPELINE_LIMITS.toolTimeoutMs : MCP_DISCOVERY_TIMEOUT_MS;
+      const toolCall = init?.method === "POST" && typeof init.body === "string" && JSON.parse(init.body).method === "tools/call";
+      const timeout = toolCall ? toolCallTimeoutMs(url) : MCP_DISCOVERY_TIMEOUT_MS;
       const options: RequestInit & { dispatcher: Dispatcher } = {
         ...init,
         dispatcher,
@@ -146,7 +153,7 @@ export async function withMcpTools<T>(
         const tool = metadata.get(name);
         if (!tool) throw new McpConnectionError("MCP-инструмент отсутствует в списке сервера.", 502);
         if (tool.taskRequired) throw new McpConnectionError("MCP-инструмент требует неподдерживаемое выполнение через tasks.", 502);
-        const timeout = url.href === PIPELINE_MCP_URL ? PIPELINE_LIMITS.toolTimeoutMs : MCP_DISCOVERY_TIMEOUT_MS;
+        const timeout = toolCallTimeoutMs(url);
         const output = await client.callTool({ name, arguments: args }, CallToolResultSchema, { signal, timeout }) as CallToolResult;
         if (tool.validate) {
           if (!output.structuredContent && !output.isError) {

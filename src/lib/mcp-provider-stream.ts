@@ -21,7 +21,11 @@ function record(value: unknown): value is Record<string, unknown> {
 
 // Общий текстовый адаптер Day 8 намеренно терпим к повреждённым SSE-строкам.
 // Здесь нельзя исполнять частичный tool_call или сохранять усечённый ответ.
-export async function readMcpProviderRound(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<ProviderToolRound> {
+export async function readMcpProviderRound(
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
+  maxToolsPerRound: number = LIMITS.maxToolsPerRound,
+): Promise<ProviderToolRound> {
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: true });
   const calls = new Map<number, ProviderToolCall>();
@@ -60,7 +64,7 @@ export async function readMcpProviderRound(body: ReadableStream<Uint8Array>, sig
     if (delta.tool_calls != null) {
       if (!Array.isArray(delta.tool_calls)) throw malformed();
       for (const fragment of delta.tool_calls) {
-        if (!record(fragment) || !Number.isSafeInteger(fragment.index) || (fragment.index as number) < 0 || (fragment.index as number) >= LIMITS.maxToolsPerRound) {
+        if (!record(fragment) || !Number.isSafeInteger(fragment.index) || (fragment.index as number) < 0 || (fragment.index as number) >= maxToolsPerRound) {
           throw new ChatAgentError("Превышен лимит инструментов в одном ответе API.", "upstream");
         }
         const index = fragment.index as number;

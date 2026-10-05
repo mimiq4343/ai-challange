@@ -4,6 +4,9 @@ export const MCP_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 export const MCP_MAX_TOOL_PAGES = 100;
 export const MCP_SERVER_RESPONSE_TIMEOUT_MS = 10_000;
 export const MCP_SESSION_CLEANUP_TIMEOUT_MS = 3_000;
+// Верхняя граница одной MCP-сессии; каждый агент задаёт свой, более короткий
+// или равный общий дедлайн. Равна самому длинному флоу — оркестрации Day 20.
+export const MCP_SESSION_TIMEOUT_MS = 300_000;
 
 // Ограничения tool loop версионируются вместе с кодом, а не через окружение.
 export const MCP_TOOL_CHAT_LIMITS = {
