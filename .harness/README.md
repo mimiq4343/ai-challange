@@ -21,6 +21,9 @@ Day 19 decisions are recorded in [`memory/day-19.md`](memory/day-19.md); the use
 approved the search, summary and Markdown-save pipeline in chat.
 Day 20 decisions are recorded in [`memory/day-20.md`](memory/day-20.md); the user
 approved multi-server MCP orchestration with DeepWiki and a code-only registry in chat.
+Day 21 decisions and measured indexing results are recorded in
+[`memory/day-21.md`](memory/day-21.md); the user approved the public corpus,
+free OpenRouter embeddings, SQLite and chunking comparison in chat.
 
 ## Superpowers designs
 
@@ -55,8 +58,8 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 
 - Day 11 was developed on a branch created from `day-8`; after the merge `main`
   carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main` and
-  was merged back; Day 13 through Day 20 followed the same route, so `main` now
-  carries days 1–20.
+  was merged back; Day 13 through Day 21 followed the same route, so `main` now
+  carries days 1–21.
 - Reports belong in topical subdirectories of `reports/`, historical material in
   `archive/`; create either directory only when there is material for it.
 - This repository has no `openspec/` directory, so OpenSpec artifacts and steps do

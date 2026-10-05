@@ -50,3 +50,8 @@ data/*.sqlite-wal
 
 # Markdown-отчёты MCP-пайплайна Day 19
 data/reports/
+
+# Локальный индекс и сравнение Day 21
+data/documents-comparison.json
+data/documents-comparison.json.*.tmp
+data/documents-index.lock

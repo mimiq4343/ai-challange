@@ -16,6 +16,7 @@ Snapshot: 2026-10-05.
 - Branch `day-18` adds profile-scoped SQLite schedules, an independent summary worker and npm-based systemd supervision; it is merged into `main`. See [Day 18](day-18.md).
 - Branch `day-19` adds an automatic GitHub search, DeepSeek review and exact Markdown-file pipeline through three MCP tools; it is merged into `main`. See [Day 19](day-19.md).
 - Branch `day-20` orchestrates four MCP servers (three own endpoints plus external DeepWiki) through one namespaced tool catalog; it is merged into `main`. See [Day 20](day-20.md).
+- Branch `day-21` indexes a public README/code corpus with free OpenRouter embeddings, stores both chunking strategies in SQLite, and compares retrieval quality; it is merged into `main`. See [Day 21](day-21.md).
 - Stack: Next.js 16 App Router, React 19, TypeScript, Tailwind CSS v4, Node.js `>=22.13.0`.
 - The user interface and the user-facing documentation are written in Russian and use the Flash Chat visual system.
 - Secrets live only in `.env.local`. That file is never committed.
