@@ -10,7 +10,7 @@ import type { RefinementRequestMode } from "./rag-refinement-types";
 
 const headers = { "Cache-Control": "no-store" };
 
-async function readPayload(request: Request): Promise<Record<string, unknown>> {
+export async function readPayload(request: Request): Promise<Record<string, unknown>> {
   request.signal.throwIfAborted();
   if (!request.body) throw new RagError("Нужен JSON-запрос.", 400);
   const reader = request.body.getReader();
@@ -33,7 +33,7 @@ async function readPayload(request: Request): Promise<Record<string, unknown>> {
   return value;
 }
 
-function failure(error: unknown, request: Request, event: string): Response {
+export function failure(error: unknown, request: Request, event: string): Response {
   if (request.signal.aborted) return new Response(null, { status: 499, headers });
   if (error instanceof RagError) {
     if (error.status === 502) console.error({ event, errorName: error.name });

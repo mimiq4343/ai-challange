@@ -69,3 +69,8 @@ data/rag-index.lock
 data/rag-refinement-comparison.json
 data/rag-refinement-comparison.json.*.tmp
 data/rag-refinement-benchmark.lock
+
+# Локальная проверка источников и цитат Day 24
+data/rag-grounding-quality.json
+data/rag-grounding-quality.json.*.tmp
+data/rag-grounding-benchmark.lock
