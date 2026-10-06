@@ -34,6 +34,11 @@ Its query rewrite, LLM reranker and three-mode comparison were approved in chat;
 the measurements and limitations are in
 [`reports/day-23/rag-quality.md`](reports/day-23/rag-quality.md).
 
+Day 24 decisions are recorded in [`memory/day-24.md`](memory/day-24.md).
+Its strict answer/source/quote contract and weak-context refusal were approved
+in chat; all ten measured answers, quotations and limitations are in
+[`reports/day-24/rag-quality.md`](reports/day-24/rag-quality.md).
+
 ## Superpowers designs
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:

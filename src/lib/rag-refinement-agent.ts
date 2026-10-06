@@ -103,6 +103,35 @@ export class RagRefinementAgent {
     return { scores, metrics: result.metrics };
   }
 
+  private async refine(question: string, sources: RagSource[], settings: RefinementSettings, signal: AbortSignal) {
+    const ranked = await this.rerank(question, sources, signal);
+    const ordered = [...sources].sort((a, b) => ranked.scores.get(b.id)!.score - ranked.scores.get(a.id)!.score || b.score - a.score || a.chunkId.localeCompare(b.chunkId));
+    const chosen = new Set(ordered.filter((item) => ranked.scores.get(item.id)!.score >= settings.minRelevance).slice(0, settings.contextK).map((item) => item.id));
+    const candidates: RefinementCandidate[] = sources.map((source) => {
+      const evaluation = ranked.scores.get(source.id)!;
+      return { source, relevance: evaluation.score, reason: evaluation.reason, decision: evaluation.score < settings.minRelevance ? "below_threshold" : chosen.has(source.id) ? "selected" : "outside_top_k" };
+    });
+    return { candidates, metrics: ranked.metrics };
+  }
+
+  async prepareContext(question: string, requestedSettings: RefinementSettings, signal: AbortSignal) {
+    const content = question.trim();
+    const settings = parseRefinementSettings(requestedSettings);
+    if (!content || content.length > RAG_CONFIG.maxQuestionCharacters) throw new RagError("Нужен непустой вопрос допустимой длины.", 400);
+    const report = this.retrieval.index.report;
+    if (!report || !this.retrieval.index.chunks.length || report.model !== RAG_EMBEDDING_CONFIG.model || report.dimensions !== RAG_EMBEDDING_CONFIG.dimensions) throw new RagError("Нужен совместимый локальный индекс. Выполните npm run rag:index.", 503);
+    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(REFINEMENT_CONFIG.requestTimeoutMs)]);
+    requestSignal.throwIfAborted();
+    const rewritten = await this.rewrite(content, requestSignal);
+    const retrieved = await this.retrieve(rewritten.query, settings.candidateK, requestSignal);
+    const refined = await this.refine(content, retrieved.sources, settings, requestSignal);
+    requestSignal.throwIfAborted();
+    const stages = [rewritten.metrics, refined.metrics];
+    return { question: content, query: rewritten.query, settings, indexId: report.id, candidates: refined.candidates,
+      sources: selectedSources(refined.candidates), stages, embeddingTokens: retrieved.tokens,
+      retrievalMs: retrieved.durationMs + stages.reduce((sum, stage) => sum + stage.durationMs, 0) };
+  }
+
   async respond(question: string, mode: RefinementRequestMode, requestedSettings: RefinementSettings, signal: AbortSignal): Promise<RefinementAnswer[]> {
     const content = question.trim();
     const settings = parseRefinementSettings(requestedSettings);
@@ -129,17 +158,11 @@ export class RagRefinementAgent {
       }
       let candidates: RefinementCandidate[] = retrieved.sources.map((source, index) => ({ source, relevance: null, reason: null, decision: index < settings.contextK ? "selected" : "outside_top_k" }));
       if (selectedMode === "refined") {
-        const ranked = await this.rerank(content, retrieved.sources, requestSignal);
-        stages.push(ranked.metrics);
-        const ordered = [...retrieved.sources].sort((a, b) => ranked.scores.get(b.id)!.score - ranked.scores.get(a.id)!.score || b.score - a.score || a.chunkId.localeCompare(b.chunkId));
-        const chosen = new Set(ordered.filter((item) => ranked.scores.get(item.id)!.score >= settings.minRelevance).slice(0, settings.contextK).map((item) => item.id));
-        candidates = retrieved.sources.map((source) => {
-          const evaluation = ranked.scores.get(source.id)!;
-          return { source, relevance: evaluation.score, reason: evaluation.reason, decision: evaluation.score < settings.minRelevance ? "below_threshold" : chosen.has(source.id) ? "selected" : "outside_top_k" };
-        });
+        const refined = await this.refine(content, retrieved.sources, settings, requestSignal);
+        stages.push(refined.metrics);
+        candidates = refined.candidates;
       }
-      const sources = candidates.filter((item) => item.decision === "selected").sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0) || b.source.score - a.source.score || a.source.chunkId.localeCompare(b.source.chunkId))
-        .map(({ source }, index) => ({ ...source, id: `S${index + 1}` }));
+      const sources = selectedSources(candidates);
       const generationSignal = AbortSignal.any([requestSignal, AbortSignal.timeout(RAG_CONFIG.requestTimeoutMs)]);
       const result = await generateRagAnswer(this.llm, { question: content, mode: "rag", sources, indexId: report.id, embeddingTokens: retrieved.tokens,
         retrievalMs: retrieved.durationMs + stages.reduce((sum, stage) => sum + stage.durationMs, 0), started: performance.now() }, generationSignal);
@@ -149,4 +172,9 @@ export class RagRefinementAgent {
     requestSignal.throwIfAborted();
     return answers;
   }
+}
+
+function selectedSources(candidates: RefinementCandidate[]): RagSource[] {
+  return candidates.filter((item) => item.decision === "selected").sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0) || b.source.score - a.source.score || a.source.chunkId.localeCompare(b.source.chunkId))
+    .map(({ source }, index) => ({ ...source, id: `S${index + 1}` }));
 }
