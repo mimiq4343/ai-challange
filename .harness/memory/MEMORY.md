@@ -31,6 +31,7 @@ them against the current sources before relying on them.
 - [day-21.md](day-21.md) — free document embeddings, fixed/structural chunking, atomic SQLite index, retrieval comparison and read snapshots.
 
 - [day-22.md](day-22.md) — arbitrary RAG questions, local E5 embeddings after the OpenRouter quota, ten-question comparison and measured limitations.
+- [day-23.md](day-23.md) — query rewrite, LLM reranking, adjustable relevance threshold and top-k, three-mode comparison and empty-context behavior.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

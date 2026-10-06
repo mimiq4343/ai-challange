@@ -64,3 +64,8 @@ data/models/
 data/rag-index-comparison.json
 data/rag-index-comparison.json.*.tmp
 data/rag-index.lock
+
+# Локальное сравнение режимов RAG Day 23
+data/rag-refinement-comparison.json
+data/rag-refinement-comparison.json.*.tmp
+data/rag-refinement-benchmark.lock

@@ -5,11 +5,11 @@ import type { RagAnswer } from "@/lib/rag-types";
 
 const FOCUS_RING = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
-export function RagAnswerCard({ result }: { result: RagAnswer }) {
+export function RagAnswerCard({ result, title }: { result: RagAnswer; title?: string }) {
   const prefix = useId();
   return (
     <article className="min-w-0 rounded-2xl border border-line bg-background p-4">
-      <h3 className="font-semibold text-accent">{result.mode === "rag" ? "С RAG" : "Без RAG"}</h3>
+      <h3 className="font-semibold text-accent">{title ?? (result.mode === "rag" ? "С RAG" : "Без RAG")}</h3>
       <p className="mt-2 text-xs leading-relaxed text-muted">{result.model} · {(result.durationMs / 1000).toFixed(1)} с · вход {result.usage.promptTokens}, выход {result.usage.completionTokens} токенов</p>
       {result.mode === "rag" && <p className="mt-1 text-xs text-muted">Поиск {(result.retrievalMs / 1000).toFixed(1)} с · {result.sources.length} фрагментов · эмбеддинг {result.embeddingTokens} токенов</p>}
       <div className="prose prose-sm prose-invert mt-4 max-w-none min-w-0 break-words [overflow-wrap:anywhere] [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:overflow-x-auto">

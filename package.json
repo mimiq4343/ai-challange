@@ -14,6 +14,7 @@
     "test:documents": "node --conditions=react-server --import tsx --test tests/document-*.test.ts",
     "rag:index": "node --conditions=react-server --import tsx scripts/index-rag-documents.ts",
     "rag:benchmark": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/rag-benchmark.ts",
+    "rag:refinement-benchmark": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/rag-refinement-benchmark.ts",
     "test:rag": "node --conditions=react-server --import tsx --test tests/rag-*.test.ts",
     "mcp:server": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/mcp-server.ts",
     "mcp:list": "node --conditions=react-server --import tsx scripts/mcp-list.ts",

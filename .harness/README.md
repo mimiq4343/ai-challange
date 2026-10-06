@@ -29,6 +29,11 @@ Day 22 decisions are recorded in [`memory/day-22.md`](memory/day-22.md).
 The measured answers, expectations and limitations are in
 [`reports/day-22/rag-quality.md`](reports/day-22/rag-quality.md).
 
+Day 23 decisions are recorded in [`memory/day-23.md`](memory/day-23.md).
+Its query rewrite, LLM reranker and three-mode comparison were approved in chat;
+the measurements and limitations are in
+[`reports/day-23/rag-quality.md`](reports/day-23/rag-quality.md).
+
 ## Superpowers designs
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:
@@ -62,8 +67,9 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 
 - Day 11 was developed on a branch created from `day-8`; after the merge `main`
   carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main` and
-  was merged back; Day 13 through Day 21 followed the same route, so `main` now
-  carries days 1–21.
+  was merged back; Day 13 through Day 22 followed the same route, so `main` now
+  carries days 1–22. Day 22 integration was explicitly approved on 2026-10-06;
+  Day 23 remains on its own branch pending integration approval.
 - Reports belong in topical subdirectories of `reports/`, historical material in
   `archive/`; create either directory only when there is material for it.
 - This repository has no `openspec/` directory, so OpenSpec artifacts and steps do
