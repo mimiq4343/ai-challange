@@ -1,4 +1,5 @@
 import { RagError } from "./rag-agent";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { GROUNDING_CONFIG } from "./rag-grounding-config";
 import type { GroundedQuote } from "./rag-grounding-types";
 import type { RagSource } from "./rag-types";
@@ -8,6 +9,25 @@ function object(value: unknown, keys: string[]): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function withoutMarkdownCode(answer: string): string {
+  type Node = { type: string; position?: { start: { offset?: number }; end: { offset?: number } }; children?: Node[] };
+  const fragments: string[] = [];
+  let cursor = 0;
+  function visit(node: Node) {
+    if (node.type === "code" || node.type === "inlineCode") {
+      const start = node.position?.start.offset;
+      const end = node.position?.end.offset;
+      if (start === undefined || end === undefined) throw new RagError("Markdown-парсер не вернул позиции фрагмента кода.", 502);
+      fragments.push(answer.slice(cursor, start), " ");
+      cursor = end;
+      return;
+    }
+    node.children?.forEach(visit);
+  }
+  visit(fromMarkdown(answer));
+  return fragments.join("") + answer.slice(cursor);
+}
+
 export function parseGroundedAnswer(text: string, context: RagSource[]) {
   let decoded: unknown;
   try { decoded = JSON.parse(text); }
@@ -15,7 +35,7 @@ export function parseGroundedAnswer(text: string, context: RagSource[]) {
   const value = object(decoded, ["status", "answer", "clarification", "sources", "quotes"]);
   if (typeof value.answer !== "string" || !value.answer.trim() || !Array.isArray(value.sources) || !Array.isArray(value.quotes)) throw new RagError("Нужны непустой ответ и массивы sources и quotes.", 502);
   const answer = value.answer.trim();
-  const cited = [...new Set(Array.from(answer.matchAll(/\[(S\d+)\]/g), (match) => match[1]))];
+  const cited = [...new Set(Array.from(withoutMarkdownCode(answer).matchAll(/\[(S\d+)\]/g), (match) => match[1]))];
   if (value.status === "unknown") {
     if (!/не знаю/i.test(answer) || value.sources.length || value.quotes.length || cited.length || typeof value.clarification !== "string" || !value.clarification.trim() || value.clarification.length > GROUNDING_CONFIG.maxClarificationCharacters || !value.clarification.includes("?") || /\[S\d+\]/.test(value.clarification)) throw new RagError("Отказ должен содержать «Не знаю», уточняющий вопрос и пустые источники и цитаты.", 502);
     return { status: "unknown" as const, answer, clarification: value.clarification.trim(), sources: [] as RagSource[], quotes: [] as GroundedQuote[], citations: [] as string[] };

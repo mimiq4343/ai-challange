@@ -11,6 +11,9 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ConversationSidebar } from "@/components/conversation-sidebar";
+import { RagAnswerCard } from "@/components/rag-answer-card";
+import { emptyRagTaskState, type RagChatSnapshot } from "@/lib/rag-chat-types";
+import type { GroundedAnswer } from "@/lib/rag-grounding-types";
 import { McpToolCard, type McpToolTrace } from "@/components/mcp-tool-card";
 import { consumeMcpChatStream } from "@/lib/mcp-chat-stream";
 import type {
@@ -36,7 +39,10 @@ export type ConversationMessageRoute =
   | "mcp-messages"
   | "scheduled-messages"
   | "pipeline-messages"
-  | "orchestrated-messages";
+  | "orchestrated-messages"
+  | "rag-messages";
+
+type WorkspaceDetail = ConversationDetail & Partial<Pick<RagChatSnapshot, "taskState" | "exchanges">>;
 
 // Эти маршруты отвечают NDJSON-событиями MCP вместо простого текстового потока.
 const MCP_EVENT_ROUTES: ReadonlySet<ConversationMessageRoute> = new Set([
@@ -46,6 +52,7 @@ const MCP_EVENT_ROUTES: ReadonlySet<ConversationMessageRoute> = new Set([
 const REFRESHING_ROUTES: ReadonlySet<ConversationMessageRoute> = new Set(["pipeline-messages", "orchestrated-messages"]);
 
 export type ConversationWorkspaceEvents = {
+  onDetail?: (detail: WorkspaceDetail) => void;
   onConversationChange?: (conversationId: string | null) => void;
   onUsagePreview?: (conversationId: string, breakdown: TokenBreakdown) => void;
   onResponseHeaders?: (conversationId: string, headers: Headers) => void;
@@ -55,7 +62,7 @@ export type ConversationWorkspaceEvents = {
 
 type ConversationWorkspaceProps = {
   initialConversations: ConversationSummary[];
-  initialDetail: ConversationDetail | null;
+  initialDetail: WorkspaceDetail | null;
   model: string | null;
   events?: ConversationWorkspaceEvents;
   messageRoute?: ConversationMessageRoute;
@@ -70,7 +77,13 @@ type UiMessage = {
   role: MessageRole;
   content: string;
   toolCalls?: McpToolTrace[];
+  groundedAnswer?: GroundedAnswer;
 };
+
+function uiMessages(detail: WorkspaceDetail): UiMessage[] {
+  const answers = new Map(detail.exchanges?.map((exchange) => [exchange.assistantMessageId, exchange.answer]));
+  return detail.messages.map((message) => ({ id: `stored-${message.id}`, role: message.role, content: message.content, groundedAnswer: answers.get(message.id) }));
+}
 
 const EXAMPLE_PROMPTS = [
   "Запомни: мой любимый цвет — синий",
@@ -139,11 +152,7 @@ export function ConversationWorkspace({
   const [conversations, setConversations] = useState(initialConversations);
   const [activeId, setActiveId] = useState(initialDetail?.conversation.id ?? null);
   const [messages, setMessages] = useState<UiMessage[]>(
-    initialDetail?.messages.map((message) => ({
-      id: `stored-${message.id}`,
-      role: message.role,
-      content: message.content,
-    })) ?? [],
+    initialDetail ? uiMessages(initialDetail) : [],
   );
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -170,8 +179,13 @@ export function ConversationWorkspace({
     return result.conversations;
   }
 
-  async function fetchConversation(id: string): Promise<ConversationDetail> {
-    return requestJson<ConversationDetail>(`/api/conversations/${id}`);
+  async function fetchConversation(id: string): Promise<WorkspaceDetail> {
+    return requestJson<WorkspaceDetail>(`/api/conversations/${id}${messageRoute === "rag-messages" ? "/rag-state" : ""}`);
+  }
+
+  function applyDetail(detail: WorkspaceDetail) {
+    setMessages(uiMessages(detail));
+    events?.onDetail?.(detail);
   }
 
   async function createConversation(): Promise<ConversationSummary> {
@@ -184,6 +198,7 @@ export function ConversationWorkspace({
     setMessages([]);
     setSidebarOpen(false);
     events?.onConversationChange?.(result.conversation.id);
+    if (messageRoute === "rag-messages") events?.onDetail?.({ conversation: result.conversation, messages: [], exchanges: [], taskState: emptyRagTaskState() });
     return result.conversation;
   }
 
@@ -208,13 +223,7 @@ export function ConversationWorkspace({
     try {
       const detail = await fetchConversation(id);
       setActiveId(id);
-      setMessages(
-        detail.messages.map((message) => ({
-          id: `stored-${message.id}`,
-          role: message.role,
-          content: message.content,
-        })),
-      );
+      applyDetail(detail);
       events?.onConversationChange?.(id);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "Не удалось загрузить диалог.");
@@ -255,13 +264,7 @@ export function ConversationWorkspace({
     try {
       const detail = await fetchConversation(next.id);
       setActiveId(next.id);
-      setMessages(
-        detail.messages.map((message) => ({
-          id: `stored-${message.id}`,
-          role: message.role,
-          content: message.content,
-        })),
-      );
+      applyDetail(detail);
       events?.onConversationChange?.(next.id);
     } catch (actionError) {
       setActiveId(null);
@@ -279,13 +282,7 @@ export function ConversationWorkspace({
   async function restoreConversation(id: string) {
     try {
       const detail = await fetchConversation(id);
-      setMessages(
-        detail.messages.map((message) => ({
-          id: `stored-${message.id}`,
-          role: message.role,
-          content: message.content,
-        })),
-      );
+      applyDetail(detail);
       await refreshConversations();
     } catch (restoreError) {
       setError(
@@ -354,7 +351,10 @@ export function ConversationWorkspace({
         );
       }
 
-      if (MCP_EVENT_ROUTES.has(messageRoute)) {
+      if (messageRoute === "rag-messages") {
+        const payload: { detail: RagChatSnapshot } = await response.json();
+        applyDetail(payload.detail);
+      } else if (MCP_EVENT_ROUTES.has(messageRoute)) {
         await consumeMcpChatStream(response.body, (event) => {
           if (event.type === "metadata") {
             applyHeaders(new Headers(event.headers));
@@ -514,12 +514,17 @@ export function ConversationWorkspace({
                     {message.toolCalls?.map((trace) => (
                       <McpToolCard key={trace.callId} trace={trace} />
                     ))}
-                    <div className="chat-md max-w-[92%] text-sm leading-relaxed">
+                    {message.groundedAnswer ? <div className="w-full"><RagAnswerCard result={message.groundedAnswer.result} quotes={message.groundedAnswer.quotes} title="Ответ по источникам" /></div> : <div className="chat-md max-w-[92%] text-sm leading-relaxed">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                      {messageRoute === "rag-messages" && !message.content && <p className="text-muted" role="status">Обновляю память и ищу подтверждения…</p>}
                       {streaming && message.id === messages.at(-1)?.id && (
                         <span className="ml-0.5 inline-block h-4 w-2 translate-y-0.5 rounded-[2px] bg-accent motion-safe:animate-pulse" />
                       )}
-                    </div>
+                    </div>}
+                    {messageRoute === "rag-messages" && !message.groundedAnswer && message.content && <section className="w-full rounded-xl border border-line p-3 text-xs text-muted" aria-label="Источники исторического сообщения">
+                      <h4 className="font-medium">Источники ответа</h4>
+                      <p className="mt-1">Для этого сообщения из прежнего чата источники не сохранялись.</p>
+                    </section>}
                     {badge && badge.responseTokens > 0 && (
                       <span className="font-mono text-[10px] text-muted">
                         {badge.source === "provider" ? "" : "≈ "}

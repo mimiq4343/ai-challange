@@ -12,7 +12,7 @@ import type { RagAnswer, RagMode, RagSource } from "./rag-types";
 import { assertContextFits, countChatPrompt } from "./token-counter";
 
 export class RagError extends Error {
-  constructor(message: string, readonly status: 400 | 413 | 502 | 503, options?: ErrorOptions) {
+  constructor(message: string, readonly status: 400 | 409 | 413 | 502 | 503, options?: ErrorOptions) {
     super(message, options);
     this.name = "RagError";
   }

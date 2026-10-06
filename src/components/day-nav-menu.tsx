@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FocusEvent } from "react";
 
 const FIRST_DAY = 5;
-const LAST_DAY = 24;
+const LAST_DAY = 25;
 const DAY_LINKS = Array.from({ length: LAST_DAY - FIRST_DAY + 1 }, (_, index) => {
   const day = FIRST_DAY + index;
   return { href: `/day-${day}`, label: `Day ${day}` };

@@ -39,6 +39,14 @@ Its strict answer/source/quote contract and weak-context refusal were approved
 in chat; all ten measured answers, quotations and limitations are in
 [`reports/day-24/rag-quality.md`](reports/day-24/rag-quality.md).
 
+Day 25 decisions are recorded in [`memory/day-25.md`](memory/day-25.md).
+The conversation-scoped task memory, atomic source snapshots and two long
+scenarios were approved in chat; design and implementation planning stayed there.
+Measurements and semantic limitations are in
+[`reports/day-25/rag-chat-quality.md`](reports/day-25/rag-chat-quality.md);
+the complete dialogues are [`history.md`](reports/day-25/history.md) and
+[`rag.md`](reports/day-25/rag.md).
+
 ## Superpowers designs
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:
@@ -73,8 +81,8 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 - Day 11 was developed on a branch created from `day-8`; after the merge `main`
   carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main` and
   was merged back; Day 13 through Day 22 followed the same route, so `main` now
-  carries days 1–23. Day 22 and Day 23 integrations were explicitly approved
-  on 2026-10-06. Day 24 is developed separately after the approved Day 23 merge.
+  carries days 1–24. Day 22 through Day 24 integrations were explicitly approved
+  on 2026-10-06. Day 25 is developed separately after the approved Day 24 merge.
 - Reports belong in topical subdirectories of `reports/`, historical material in
   `archive/`; create either directory only when there is material for it.
 - This repository has no `openspec/` directory, so OpenSpec artifacts and steps do

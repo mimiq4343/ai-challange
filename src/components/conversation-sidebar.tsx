@@ -26,6 +26,26 @@ export function ConversationSidebar({
   const [deleteTarget, setDeleteTarget] = useState<ConversationSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!open || window.matchMedia("(min-width: 1024px)").matches) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const panel = sidebarRef.current;
+    const controls = () => Array.from(panel?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], [tabindex='0']") ?? []);
+    controls()[0]?.focus();
+    function trapFocus(event: KeyboardEvent) {
+      if (event.key !== "Tab" || deleteTarget || window.matchMedia("(min-width: 1024px)").matches) return;
+      const targets = controls();
+      const first = targets[0];
+      const last = targets.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener("keydown", trapFocus);
+    return () => { document.removeEventListener("keydown", trapFocus); if (previous?.isConnected) previous.focus(); };
+  }, [open, deleteTarget]);
 
   useEffect(() => {
     if (deleteTarget) cancelRef.current?.focus();
@@ -65,9 +85,10 @@ export function ConversationSidebar({
       )}
 
       <aside
+        ref={sidebarRef}
         id="conversation-sidebar"
         aria-label="Список диалогов"
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-line bg-surface transition-transform duration-200 motion-reduce:transition-none lg:static lg:z-auto lg:max-w-none lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-line bg-surface transition-transform duration-200 motion-reduce:transition-none lg:visible lg:static lg:z-auto lg:max-w-none lg:translate-x-0 ${open ? "visible translate-x-0" : "invisible -translate-x-full"}`}
       >
         <div className="flex items-center gap-2 border-b border-line p-3">
           <button
