@@ -4,7 +4,10 @@ Snapshot: 2026-10-06.
 
 - The user approved the in-chat design and merging Day 23 into main before
   creating `day-24`. Main integration and its Day 24 timeline entry were pushed;
-  Day 24 remains separate until the user approves integration.
+  The user approved Day 24 integration and the Day 25 in-chat design on
+  2026-10-06. All 45 RAG tests, the production build and `git diff --check`
+  passed before merging. Main integration was pushed; the README now identifies
+  Day 24 as stable and uses the local quality-report link.
 - [`GroundedRagAgent`](../../src/lib/rag-grounding-agent.ts) reuses Day 23 rewrite,
   retrieval and reranking through `prepareContext`. The shared selection path
   keeps earlier RAG behavior and source numbering. No new dependency or model
