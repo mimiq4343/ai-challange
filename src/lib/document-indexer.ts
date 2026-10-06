@@ -20,16 +20,18 @@ type IndexOptions = {
   questions?: readonly RetrievalQuestion[];
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
+  config?: { model: string; dimensions: number; maxTokens: number; overlapTokens: number; batchSize: number; batchCharacters: number; reportPath: string; runLockPath: string };
+  countTokens?: (text: string) => Promise<number>;
 };
 
-function batches<T>(items: readonly T[], text: (item: T) => string): T[][] {
+function batches<T>(items: readonly T[], text: (item: T) => string, config: { batchSize: number; batchCharacters: number }): T[][] {
   const result: T[][] = [];
   let batch: T[] = [];
   let characters = 0;
   for (const item of items) {
     const length = text(item).length;
-    if (length > DOCUMENT_INDEX_CONFIG.batchCharacters) throw new Error("Один текст превышает лимит пакета OpenRouter.");
-    if (batch.length && (batch.length === DOCUMENT_INDEX_CONFIG.batchSize || characters + length > DOCUMENT_INDEX_CONFIG.batchCharacters)) {
+    if (length > config.batchCharacters) throw new Error("Один текст превышает лимит пакета эмбеддингов.");
+    if (batch.length && (batch.length === config.batchSize || characters + length > config.batchCharacters)) {
       result.push(batch); batch = []; characters = 0;
     }
     batch.push(item); characters += length;
@@ -40,7 +42,7 @@ function batches<T>(items: readonly T[], text: (item: T) => string): T[][] {
 
 export async function indexDocuments(options: IndexOptions): Promise<DocumentIndexReport> {
   options.signal?.throwIfAborted();
-  const lockPath = resolve(options.root, DOCUMENT_INDEX_CONFIG.runLockPath);
+  const lockPath = resolve(options.root, (options.config ?? DOCUMENT_INDEX_CONFIG).runLockPath);
   await mkdir(dirname(lockPath), { recursive: true });
   let lock;
   try {
@@ -62,19 +64,20 @@ export async function indexDocuments(options: IndexOptions): Promise<DocumentInd
 
 async function buildIndex(options: IndexOptions): Promise<DocumentIndexReport> {
   const { root, store, client, signal, onProgress } = options;
+  const config = options.config ?? DOCUMENT_INDEX_CONFIG;
   signal?.throwIfAborted();
   const corpus = await loadDocumentCorpus(root, options.sources);
   const questions = options.questions ?? questionsManifest;
   validateRetrievalQuestions(corpus.documents, questions);
   onProgress?.(`Корпус: ${corpus.documents.length} файлов, ${corpus.characters} символов, ~${corpus.estimatedPages} страниц по ${corpus.charactersPerPage} символов.`);
-  const countTokens = (text: string) => countTextTokens(text, DOCUMENT_INDEX_CONFIG.tokenizer);
+  const countTokens = options.countTokens ?? ((text: string) => countTextTokens(text, DOCUMENT_INDEX_CONFIG.tokenizer));
   const strategies: { strategy: "fixed" | "structural"; chunks: EmbeddedChunk[]; embeddingMs: number }[] = [];
   let providerRequests = 0;
   let providerTokens = 0;
   for (const strategy of ["fixed", "structural"] as const) {
     signal?.throwIfAborted();
-    const chunks = await chunkDocuments(corpus.documents, strategy, countTokens);
-    const groups = batches(chunks, (chunk) => chunk.text);
+    const chunks = await chunkDocuments(corpus.documents, strategy, countTokens, config);
+    const groups = batches(chunks, (chunk) => chunk.text, config);
     onProgress?.(`${strategy}: ${chunks.length} чанков, ${groups.length} пакетов эмбеддингов.`);
     const embedded: EmbeddedChunk[] = [];
     const started = performance.now();
@@ -89,7 +92,7 @@ async function buildIndex(options: IndexOptions): Promise<DocumentIndexReport> {
     strategies.push({ strategy, chunks: embedded, embeddingMs: Math.round(performance.now() - started) });
   }
   const queryVectors: number[][] = [];
-  for (const group of batches(questions, (question) => question.question)) {
+  for (const group of batches(questions, (question) => question.question, config)) {
     signal?.throwIfAborted();
     const response = await client.embed(group.map((question) => question.question), "search_query", signal);
     queryVectors.push(...response.vectors.map((vector) => vector.map(Math.fround)));
@@ -99,17 +102,17 @@ async function buildIndex(options: IndexOptions): Promise<DocumentIndexReport> {
   signal?.throwIfAborted();
   const { documents, ...corpusMetadata } = corpus;
   const report: DocumentIndexReport = {
-    id: randomUUID(), createdAt: new Date().toISOString(), model: DOCUMENT_INDEX_CONFIG.model,
-    dimensions: DOCUMENT_INDEX_CONFIG.dimensions,
+    id: randomUUID(), createdAt: new Date().toISOString(), model: config.model,
+    dimensions: config.dimensions,
     corpus: { ...corpusMetadata, files: documents.length },
-    chunking: { maxTokens: DOCUMENT_INDEX_CONFIG.maxTokens, overlapTokens: DOCUMENT_INDEX_CONFIG.overlapTokens },
+    chunking: { maxTokens: config.maxTokens, overlapTokens: config.overlapTokens },
     providerRequests, providerTokens,
-    comparison: strategies.map(({ strategy, chunks, embeddingMs }) => compareDocumentStrategy(strategy, chunks, questions, queryVectors, embeddingMs, DOCUMENT_INDEX_CONFIG.dimensions)),
+    comparison: strategies.map(({ strategy, chunks, embeddingMs }) => compareDocumentStrategy(strategy, chunks, questions, queryVectors, embeddingMs, config.dimensions)),
   };
   signal?.throwIfAborted();
   store.replaceIndex(report, strategies.flatMap((item) => item.chunks));
   onProgress?.(`Индекс ${report.id} сохранён одной транзакцией.`);
-  const reportPath = resolve(root, DOCUMENT_INDEX_CONFIG.reportPath);
+  const reportPath = resolve(root, config.reportPath);
   const temporaryReport = `${reportPath}.${process.pid}.tmp`;
   try {
     await writeFile(temporaryReport, `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });

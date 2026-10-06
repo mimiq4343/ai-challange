@@ -25,6 +25,10 @@ Day 21 decisions and measured indexing results are recorded in
 [`memory/day-21.md`](memory/day-21.md); the user approved the public corpus,
 free OpenRouter embeddings, SQLite and chunking comparison in chat.
 
+Day 22 decisions are recorded in [`memory/day-22.md`](memory/day-22.md).
+The measured answers, expectations and limitations are in
+[`reports/day-22/rag-quality.md`](reports/day-22/rag-quality.md).
+
 ## Superpowers designs
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:

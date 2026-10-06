@@ -19,6 +19,16 @@ function norm(vector: readonly number[]): number {
   return Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
 }
 
+export function rankDocumentChunks(chunks: readonly EmbeddedChunk[], query: readonly number[], dimensions: number, limit: number): { chunk: EmbeddedChunk; score: number }[] {
+  if (!chunks.length || !Number.isSafeInteger(limit) || limit < 1) throw new Error("Нужен непустой индекс и положительный top-k.");
+  validateEmbedding(query, dimensions);
+  const queryNorm = norm(query);
+  return chunks.map((chunk) => {
+    validateEmbedding(chunk.embedding, dimensions);
+    return { chunk, score: chunk.embedding.reduce((sum, value, index) => sum + value * query[index], 0) / (norm(chunk.embedding) * queryNorm) };
+  }).sort((a, b) => b.score - a.score || a.chunk.chunkId.localeCompare(b.chunk.chunkId)).slice(0, limit);
+}
+
 export function compareDocumentStrategy(
   strategy: ChunkStrategy,
   chunks: readonly EmbeddedChunk[],
@@ -30,16 +40,12 @@ export function compareDocumentStrategy(
   if (!chunks.length || !questions.length || questions.length !== queryVectors.length || chunks.some((chunk) => chunk.strategy !== strategy)) {
     throw new Error("Неполные данные сравнения стратегий индексации.");
   }
-  const norms = chunks.map((chunk) => { validateEmbedding(chunk.embedding, dimensions); return norm(chunk.embedding); });
   const retrieval = questions.map((question, index) => {
-    const query = queryVectors[index];
-    validateEmbedding(query, dimensions);
-    const queryNorm = norm(query);
-    const hits = chunks.map((chunk, i) => ({
+    const hits = rankDocumentChunks(chunks, queryVectors[index], dimensions, 5).map(({ chunk, score }) => ({
       chunkId: chunk.chunkId, source: chunk.source, section: chunk.section,
-      score: chunk.embedding.reduce((sum, value, j) => sum + value * query[j], 0) / (norms[i] * queryNorm),
+      score,
       relevant: chunk.source === question.source && chunk.text.includes(question.evidence),
-    })).sort((a, b) => b.score - a.score || a.chunkId.localeCompare(b.chunkId)).slice(0, 5);
+    }));
     const position = hits.findIndex((hit) => hit.relevant);
     return { questionId: question.id, question: question.question, expectedSource: question.source,
       expectedSection: question.section, expectedEvidence: question.evidence, rank: position < 0 ? null : position + 1, hits };

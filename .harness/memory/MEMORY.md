@@ -30,5 +30,7 @@ them against the current sources before relying on them.
 - [day-20.md](day-20.md) — multi-server MCP orchestration: code registry with DeepWiki, namespaced router, chain provenance, routing journal.
 - [day-21.md](day-21.md) — free document embeddings, fixed/structural chunking, atomic SQLite index, retrieval comparison and read snapshots.
 
+- [day-22.md](day-22.md) — arbitrary RAG questions, local E5 embeddings after the OpenRouter quota, ten-question comparison and measured limitations.
+
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

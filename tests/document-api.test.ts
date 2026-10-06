@@ -67,3 +67,35 @@ test("a concurrent index replacement cannot mix an old report with new chunks", 
     writer.close();
   }
 });
+
+test("RAG vector snapshots keep the report and vectors from the same committed index", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "flash-rag-snapshot-"));
+  const path = join(root, "index.sqlite");
+  const store = new SqliteDocumentStore(path);
+  t.after(async () => { store.close(); await rm(root, { recursive: true, force: true }); });
+  await writeFile(join(root, "guide.md"), "# Guide\ntransaction\n");
+  const original = await indexDocuments({ root, store, sources: ["guide.md"], questions: [
+    { id: "storage", question: "Как сохранять?", source: "guide.md", section: "Guide", evidence: "transaction" },
+  ], client: { async embed(inputs) { return { vectors: inputs.map(() => [1, ...Array<number>(2047).fill(0)]), tokens: 10 }; } } });
+  const writer = new DatabaseSync(path);
+  const readReport = store.latestReport.bind(store);
+  let replaced = false;
+  store.latestReport = () => {
+    const report = readReport();
+    if (!replaced) {
+      replaced = true;
+      writer.exec("BEGIN IMMEDIATE");
+      writer.prepare("UPDATE document_index SET report_json = ?").run(JSON.stringify({ ...original, id: "new-index" }));
+      writer.exec("UPDATE document_chunks SET text = 'changed'");
+      writer.exec("COMMIT");
+    }
+    return report;
+  };
+  try {
+    const snapshot = store.readIndexVectors("structural");
+    assert.equal(snapshot.report!.id, original.id);
+    assert.match(snapshot.chunks[0].text, /transaction/);
+    assert.equal(snapshot.chunks[0].embedding.length, 2048);
+    assert.equal(store.latestReport()!.id, "new-index");
+  } finally { writer.close(); }
+});
