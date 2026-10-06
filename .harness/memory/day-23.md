@@ -33,3 +33,7 @@ Snapshot: 2026-10-06.
   zero refined context on both negative questions. A subsequent cancellation
   preserved the saved report and released the lock. Desktop/mobile checks also
   covered Day 7 drawer and focus behavior; see the report for verification scope.
+- The user approved Day 23 integration and the Day 24 design on 2026-10-06.
+  Before merging, all 31 RAG tests, the production build and `git diff --check`
+  passed. The README conflict was only a remote versus local report link;
+  the merged main uses the local report and identifies Day 23 as stable.
