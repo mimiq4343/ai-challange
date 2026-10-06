@@ -12,14 +12,14 @@ import type { RagAnswer, RagMode, RagSource } from "./rag-types";
 import { assertContextFits, countChatPrompt } from "./token-counter";
 
 export class RagError extends Error {
-  constructor(message: string, readonly status: 400 | 502 | 503, options?: ErrorOptions) {
+  constructor(message: string, readonly status: 400 | 413 | 502 | 503, options?: ErrorOptions) {
     super(message, options);
     this.name = "RagError";
   }
 }
 
 type RagIndex = ReturnType<SqliteDocumentStore["readIndexVectors"]>;
-type RetrievalDependencies = { index: RagIndex; embedder: Pick<DocumentEmbeddingClient, "embed"> };
+export type RagRetrievalDependencies = { index: RagIndex; embedder: Pick<DocumentEmbeddingClient, "embed"> };
 
 export function loadRagIndex(): RagIndex {
   const store = new SqliteDocumentStore(RAG_EMBEDDING_CONFIG.databasePath, RAG_EMBEDDING_CONFIG);
@@ -27,7 +27,7 @@ export function loadRagIndex(): RagIndex {
 }
 
 export class RagAgent {
-  constructor(private readonly llm: CompressionLlmResponder, private readonly retrieval?: RetrievalDependencies) {}
+  constructor(private readonly llm: CompressionLlmResponder, private readonly retrieval?: RagRetrievalDependencies) {}
 
   static fromEnvironment(mode: "plain" | "rag" | "compare"): RagAgent {
     const llm = ChatAgent.fromEnvironment();
@@ -72,26 +72,36 @@ export class RagAgent {
       embeddingTokens = embedded.tokens;
       retrievalMs = performance.now() - started;
     }
-    const request = mode === "plain" ? content : `QUESTION\n${content}\n\nCONTEXT_JSON\n${JSON.stringify(sources.map(({ id, source, section, startLine, endLine, text }) => ({ id, source, section, startLine, endLine, text })))}`;
-    const options = { systemMessages: [RAG_SYSTEM_PROMPT], maxOutputTokens: RAG_CONFIG.maxOutputTokens, strictStream: true };
-    const preflight = await countChatPrompt({ systemMessages: options.systemMessages, history: [], request, reservedOutputTokens: options.maxOutputTokens });
-    assertContextFits(preflight);
-    requestSignal.throwIfAborted();
-    const generationStarted = performance.now();
-    const response = await this.llm.respond([{ role: "user", content: request }], requestSignal, options);
-    const answer = (await new Response(response.stream).text()).trim();
-    requestSignal.throwIfAborted();
-    if (!answer) throw new RagError("LLM вернула пустой ответ.", 502);
-    if (answer.length > RAG_CONFIG.maxAnswerCharacters) throw new RagError("Ответ LLM превышает допустимый объём.", 502);
-    if (await response.finishReason !== "stop") throw new RagError("LLM не завершила ответ полностью. Повторите запрос.", 502);
-    const usage = await response.usage;
-    if (!usage) throw new RagError("LLM не вернула корректную статистику токенов.", 502);
-    const cited = [...new Set(Array.from(answer.matchAll(/\[(S\d+)\]/g), (match) => match[1]))];
-    const known = new Set(sources.map((source) => source.id));
-    return {
-      mode, question: content, answer, model: this.llm.model, indexId, sources,
-      citations: cited.filter((id) => known.has(id)), invalidCitations: cited.filter((id) => !known.has(id)), usage, embeddingTokens,
-      retrievalMs: Math.round(retrievalMs), generationMs: Math.round(performance.now() - generationStarted), durationMs: Math.round(performance.now() - started),
-    };
+    return generateRagAnswer(this.llm, { question: content, mode, sources, indexId, embeddingTokens, retrievalMs, started }, requestSignal);
   }
+}
+
+export async function generateRagAnswer(llm: CompressionLlmResponder, input: {
+  question: string; mode: RagMode; sources: RagSource[]; indexId: string | null;
+  embeddingTokens: number; retrievalMs: number; started: number;
+}, requestSignal: AbortSignal): Promise<RagAnswer> {
+  const { question, mode, sources, indexId, embeddingTokens, retrievalMs, started } = input;
+  const request = mode === "plain" ? question : `QUESTION\n${question}\n\nCONTEXT_JSON\n${JSON.stringify(sources.map(({ id, source, section, startLine, endLine, text }) => ({ id, source, section, startLine, endLine, text })))}`;
+  const systemMessages = [RAG_SYSTEM_PROMPT];
+  if (mode === "rag" && sources.length === 0) systemMessages.push("RAG включён, но подходящих источников после отбора нет. Явно сообщи, что в найденных источниках нет ответа. Не выдумывай факты проекта и не предлагай включить RAG.");
+  const options = { systemMessages, maxOutputTokens: RAG_CONFIG.maxOutputTokens, strictStream: true };
+  const preflight = await countChatPrompt({ systemMessages: options.systemMessages, history: [], request, reservedOutputTokens: options.maxOutputTokens });
+  assertContextFits(preflight);
+  requestSignal.throwIfAborted();
+  const generationStarted = performance.now();
+  const response = await llm.respond([{ role: "user", content: request }], requestSignal, options);
+  const answer = (await new Response(response.stream).text()).trim();
+  requestSignal.throwIfAborted();
+  if (!answer) throw new RagError("LLM вернула пустой ответ.", 502);
+  if (answer.length > RAG_CONFIG.maxAnswerCharacters) throw new RagError("Ответ LLM превышает допустимый объём.", 502);
+  if (await response.finishReason !== "stop") throw new RagError("LLM не завершила ответ полностью. Повторите запрос.", 502);
+  const usage = await response.usage;
+  if (!usage) throw new RagError("LLM не вернула корректную статистику токенов.", 502);
+  const cited = [...new Set(Array.from(answer.matchAll(/\[(S\d+)\]/g), (match) => match[1]))];
+  const known = new Set(sources.map((source) => source.id));
+  return {
+    mode, question, answer, model: llm.model, indexId, sources,
+    citations: cited.filter((id) => known.has(id)), invalidCitations: cited.filter((id) => !known.has(id)), usage, embeddingTokens,
+    retrievalMs: Math.round(retrievalMs), generationMs: Math.round(performance.now() - generationStarted), durationMs: Math.round(performance.now() - started),
+  };
 }

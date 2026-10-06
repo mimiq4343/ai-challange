@@ -19,7 +19,7 @@ function hasExactKeys(
   );
 }
 
-function parseScores(value: unknown): JudgeScores {
+export function parseScores(value: unknown): JudgeScores {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError("Judge scores имеют недействительную структуру.");
   }
