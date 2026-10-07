@@ -238,7 +238,7 @@ export function ConversationWorkspace({
     setError(null);
 
     const response = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
-    if (!response.ok) {
+    if (!response.ok && response.status !== 404) {
       const payload = await response.json().catch(() => null);
       const message =
         payload && typeof payload === "object" && "error" in payload
@@ -273,7 +273,6 @@ export function ConversationWorkspace({
       setError(
         actionError instanceof Error ? actionError.message : "Не удалось загрузить следующий диалог.",
       );
-      throw actionError;
     } finally {
       setLoadingConversation(false);
     }

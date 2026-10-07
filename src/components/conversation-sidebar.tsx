@@ -25,6 +25,7 @@ export function ConversationSidebar({
 }: ConversationSidebarProps) {
   const [deleteTarget, setDeleteTarget] = useState<ConversationSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
 
@@ -65,9 +66,14 @@ export function ConversationSidebar({
   async function confirmDelete() {
     if (!deleteTarget || deleting) return;
     setDeleting(true);
+    setDeleteError(null);
     try {
       await onDelete(deleteTarget.id);
       setDeleteTarget(null);
+    } catch (error) {
+      setDeleteError(error instanceof TypeError
+        ? "Не удалось удалить диалог. Проверьте соединение и попробуйте ещё раз."
+        : error instanceof Error ? error.message : "Не удалось удалить диалог. Попробуйте ещё раз.");
     } finally {
       setDeleting(false);
     }
@@ -145,7 +151,7 @@ export function ConversationSidebar({
                       type="button"
                       disabled={disabled}
                       aria-label={`Удалить диалог «${conversation.title}»`}
-                      onClick={() => setDeleteTarget(conversation)}
+                      onClick={() => { setDeleteError(null); setDeleteTarget(conversation); }}
                       className={`flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl text-muted transition-colors hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45 ${active ? "opacity-100" : "opacity-70"}`}
                     >
                       <TrashIcon size={16} aria-hidden />
@@ -177,6 +183,7 @@ export function ConversationSidebar({
             <p className="mt-2 break-words text-sm leading-relaxed text-muted">
               «{deleteTarget.title}» и все его сообщения будут удалены без восстановления.
             </p>
+            {deleteError && <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs leading-relaxed text-red-200">{deleteError}</p>}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 ref={cancelRef}
