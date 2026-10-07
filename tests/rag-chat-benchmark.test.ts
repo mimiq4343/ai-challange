@@ -15,7 +15,7 @@ test("two 12-turn scenarios use persisted memory, isolate conversations and keep
     if (!prompt.includes("RAG_CHAT_JUDGE")) assert.ok(!payload.includes("JUDGE_ONLY_EXPECTATION"));
     if (prompt.includes("RAG_TASK_MEMORY")) {
       const input = JSON.parse(payload);
-      return JSON.stringify({ goal: input.content.startsWith("Цель:") ? { value: input.content.slice(6), evidence: input.content.slice(6) } : null, upsert: [], remove: [], question: "Как сохранять?" });
+      return JSON.stringify({ goal: input.content.startsWith("Цель:") ? { value: input.content.slice(6), evidenceId: input.evidenceOptions[0].id } : null, upsert: [], remove: [], question: "Как сохранять?" });
     }
     if (prompt.includes("RAG_CHAT_JUDGE")) return JSON.stringify({ goalRetained: true, constraintsRespected: true, termsCorrect: true, followsQuestion: true, supported: true, rationale: "Цель сохранена; цитата подтверждает ответ." });
   });

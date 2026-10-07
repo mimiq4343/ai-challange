@@ -17,14 +17,60 @@ async function setup(t: { after(fn: () => Promise<void>): void }) {
   return store;
 }
 
+test("coordinated user constraints persist verbatim server evidence and keep the previous goal", async (t) => {
+  const store = await setup(t);
+  const id = store.createConversation().id;
+  const goal = "Проверить надёжность истории Day 7";
+  const content = "Разбираем только Day 7, без замены SQLite и новых зависимостей. Как openChatDatabase настраивает журнал?";
+  const llm = groundingLlm((prompt, payload) => {
+    if (prompt.includes("QUERY_REWRITE")) return JSON.stringify({ query: JSON.parse(payload).question });
+    if (!prompt.includes("RAG_TASK_MEMORY")) return;
+    const input = JSON.parse(payload);
+    const evidence = input.evidenceOptions ? { evidenceId: input.evidenceOptions[0].id } : { evidence: input.content === content ? "без новых зависимостей" : input.content };
+    return JSON.stringify({ goal: input.content.startsWith("Цель:") ? { value: goal, ...evidence } : null,
+      upsert: input.content === content ? [
+        { kind: "constraints", key: "Область", value: "Только Day 7", ...evidence },
+        { kind: "constraints", key: "Изменения", value: "Без замены SQLite и новых зависимостей", ...evidence },
+      ] : [], remove: [], question: input.content === content ? content : "Как сохраняются сообщения?" });
+  });
+  const agent = new RagChatAgent(store, llm, { index: await refinementIndex(t), embedder: testEmbedder });
+  await agent.respond(id, `Цель: ${goal}`, testSettings, new AbortController().signal);
+  const saved = await agent.respond(id, content, testSettings, new AbortController().signal);
+  assert.equal(saved.messages.length, 4);
+  assert.equal(saved.taskState.goal!.value, goal);
+  assert.equal(saved.taskState.goal!.turn, 1);
+  assert.deepEqual(saved.taskState.constraints, [
+    { key: "Область", value: "Только Day 7", evidence: content, turn: 2 },
+    { key: "Изменения", value: "Без замены SQLite и новых зависимостей", evidence: content, turn: 2 },
+  ]);
+  assert.ok(saved.exchanges[1].answer.result.sources.length > 0);
+  assert.ok(saved.exchanges[1].answer.quotes.length > 0);
+});
+
+test("long messages retain bounded evidence from the selected paragraph of the current user turn", async (t) => {
+  const store = await setup(t);
+  const id = store.createConversation().id;
+  const content = `${"А".repeat(1980)}\n\nОграничение: без новых зависимостей.`;
+  const llm = groundingLlm((prompt, payload) => {
+    if (!prompt.includes("RAG_TASK_MEMORY")) return;
+    const input = JSON.parse(payload);
+    const option = input.evidenceOptions.find((row: { text: string }) => row.text === "Ограничение: без новых зависимостей.");
+    return JSON.stringify({ goal: null, upsert: [{ kind: "constraints", key: "Зависимости", value: "Без новых зависимостей", evidenceId: option.id }], remove: [], question: "Как сохраняются сообщения?" });
+  });
+  const saved = await new RagChatAgent(store, llm, { index: await refinementIndex(t), embedder: testEmbedder }).respond(id, content, testSettings, new AbortController().signal);
+  assert.deepEqual(saved.taskState.constraints, [{ key: "Зависимости", value: "Без новых зависимостей", evidence: "Ограничение: без новых зависимостей.", turn: 1 }]);
+  assert.equal(saved.messages[0].content, content);
+  assert.equal(saved.messages.length, 2);
+});
+
 test("task memory survives beyond the prompt tail; a correction replaces the original term", async (t) => {
   const store = await setup(t);
   const id = store.createConversation().id;
   const llm = groundingLlm((prompt, payload) => {
     const input = JSON.parse(payload);
     if (prompt.includes("RAG_TASK_MEMORY")) {
-      return JSON.stringify({ goal: input.content.includes("Цель:") ? { value: "Проверить сохранение", evidence: "Проверить сохранение" } : null,
-        upsert: input.content.includes("обмен") ? [{ kind: "terms", key: "обмен", value: input.content.includes("Исправление") ? "user + assistant" : "Одно сообщение", evidence: input.content }]: [],
+      return JSON.stringify({ goal: input.content.includes("Цель:") ? { value: "Проверить сохранение", evidenceId: input.evidenceOptions[0].id } : null,
+        upsert: input.content.includes("обмен") ? [{ kind: "terms", key: "обмен", value: input.content.includes("Исправление") ? "user + assistant" : "Одно сообщение", evidenceId: input.evidenceOptions[0].id }]: [],
         remove: [], question: "Как сохраняются сообщения?" });
     }
     if (prompt.includes("GROUNDED_RAG_ANSWER")) {
@@ -51,14 +97,14 @@ test("task memory survives beyond the prompt tail; a correction replaces the ori
 test("a failed, truncated or cancelled memory/generation stage never commits an exchange or a new goal", async (t) => {
   const store = await setup(t);
   const index = await refinementIndex(t);
-  for (const fault of ["json", "quote", "truncated", "usage", "aborted", "generation"]) {
+  for (const fault of ["json", "quote", "rewrittenQuote", "truncated", "usage", "aborted", "generation"]) {
     const id = store.createConversation().id;
     const controller = new AbortController();
     const base = groundingLlm((prompt) => {
       if (prompt.includes("RAG_TASK_MEMORY")) {
         if (fault === "json") return "invalid";
         if (fault === "aborted") controller.abort();
-        return JSON.stringify({ goal: { value: "Аудит", evidence: fault === "quote" ? "Выдуманная цель" : "Аудит" }, upsert: [], remove: [], question: "Как сохранять?" });
+        return JSON.stringify({ goal: { value: "Аудит", ...(fault === "rewrittenQuote" ? { evidence: "Выдуманная цель" } : { evidenceId: fault === "quote" ? "E404" : "E1" }) }, upsert: [], remove: [], question: "Как сохранять?" });
       }
       if (prompt.includes("GROUNDED_RAG_ANSWER") && fault === "generation") throw new Error("provider failure");
     });
@@ -76,7 +122,7 @@ test("explicit refusal still persists the completed conversation and its user co
   const store = await setup(t);
   const id = store.createConversation().id;
   const llm = groundingLlm((prompt, payload) => {
-    if (prompt.includes("RAG_TASK_MEMORY")) return JSON.stringify({ goal: { value: "Аудит", evidence: "Аудит" }, upsert: [], remove: [], question: "Погода на Марсе?" });
+    if (prompt.includes("RAG_TASK_MEMORY")) return JSON.stringify({ goal: { value: "Аудит", evidenceId: "E1" }, upsert: [], remove: [], question: "Погода на Марсе?" });
     if (prompt.includes("RELEVANCE_RERANK")) return JSON.stringify({ results: JSON.parse(payload).candidates.map((source: { id: string }) => ({ id: source.id, score: 0, reason: "Вне корпуса" })) });
   });
   const saved = await new RagChatAgent(store, llm, { index: await refinementIndex(t), embedder: testEmbedder }).respond(id, "Аудит", testSettings, new AbortController().signal);
@@ -90,9 +136,11 @@ test("explicit refusal still persists the completed conversation and its user co
 });
 
 test("memory patches preserve untouched constraints and reject fabricated provenance or ambiguous duplicates", () => {
-  const first = applyTaskMemoryPatch(emptyRagTaskState(), { goal: null, upsert: [{ kind: "constraints", key: "БД", value: "SQLite", evidence: "SQLite" }], remove: [], question: "SQLite" }, "Только SQLite", 1);
+  const first = applyTaskMemoryPatch(emptyRagTaskState(), { goal: null, upsert: [{ kind: "constraints", key: "БД", value: "SQLite", evidenceId: "E1" }], remove: [], question: "SQLite" }, "Только SQLite", 1);
   const second = applyTaskMemoryPatch(first.taskState, { goal: null, upsert: [], remove: [], question: "Далее?" }, "Далее?", 2);
-  assert.deepEqual(second.taskState.constraints, [{ key: "БД", value: "SQLite", evidence: "SQLite", turn: 1 }]);
-  assert.throws(() => applyTaskMemoryPatch(first.taskState, { goal: null, upsert: [{ kind: "constraints", key: "БД", value: "Postgres", evidence: "Postgres" }], remove: [], question: "Далее?" }, "Далее?", 2), /не подтверждено/);
-  assert.throws(() => applyTaskMemoryPatch(first.taskState, { goal: null, upsert: [], remove: [{ kind: "constraints", key: "БД", evidence: "SQLite" }, { kind: "constraints", key: "БД", evidence: "SQLite" }], question: "SQLite" }, "SQLite", 2), /повторяется/);
+  assert.deepEqual(second.taskState.constraints, [{ key: "БД", value: "SQLite", evidence: "Только SQLite", turn: 1 }]);
+  assert.throws(() => applyTaskMemoryPatch(first.taskState, { goal: null, upsert: [{ kind: "constraints", key: "БД", value: "Postgres", evidenceId: "E404" }], remove: [], question: "Далее?" }, "Далее?", 2), /отсутствующий фрагмент/);
+  assert.throws(() => applyTaskMemoryPatch(first.taskState, { goal: null, upsert: [], remove: [{ kind: "constraints", key: "БД", evidenceId: "E1" }, { kind: "constraints", key: "БД", evidenceId: "E1" }], question: "SQLite" }, "SQLite", 2), /повторяется/);
+  const removed = applyTaskMemoryPatch(first.taskState, { goal: null, upsert: [], remove: [{ kind: "constraints", key: "БД", evidenceId: "E1" }], question: "Отменяю ограничение SQLite" }, "Отменяю ограничение SQLite", 2);
+  assert.deepEqual(removed.taskState.constraints, []);
 });

@@ -14,6 +14,17 @@ Snapshot: 2026-10-07.
   changes carry exact quotations from the current user message and a user-turn
   cursor. Unchanged keys remain; explicit corrections replace a key. Stored
   provenance is checked against the actual SQLite user messages.
+- A reported second-turn HTTP 502 came from matching model-written memory
+  quotations against the current user message. A controlled provider fixture
+  reproduced it with the coordinated phrase "без замены SQLite и новых
+  зависимостей": the rewritten quote "без новых зависимостей" is not contiguous.
+  Real provider repetitions sometimes succeeded, so repeating the request was
+  not a reliable fix. Memory patches now select `evidenceId` from server-supplied
+  `evidenceOptions`; the server restores the original text. Whole messages,
+  paragraphs and overlapping windows provide quotations bounded to 1,000
+  characters. Foreign IDs and model-written quotes fail before saving. Existing
+  persisted `evidence` strings, turn cursors and SQLite provenance checks remain
+  compatible; no data migration is required.
 - Only the last six messages accompany the persistent task memory in the prompt.
   The standalone current question drives rewrite/retrieval/reranking. Historical
   source IDs are not evidence for the current answer. Day 24 keeps its isolated
@@ -53,6 +64,13 @@ Snapshot: 2026-10-07.
   Stored memory was correct in both cases. These semantic limitations remain
   visible in [the report](../reports/day-25/rag-chat-quality.md), not corrected
   by rewriting generated answers. Total provider usage was 544,979 tokens.
-- Verification passed: 58 RAG tests, 3 persistence tests, edited-file lint,
+- Initial verification passed: 58 RAG tests, 3 persistence tests, edited-file lint,
   TypeScript, production build and `git diff --check`. Next.js 16's build and dev
   output directories allowed the development server to stay running during build.
+- The memory quotation fix passed 60 RAG tests, 3 persistence tests, edited-file
+  lint, TypeScript and `git diff --check`. Three real memory-stage probes accepted
+  the reported question. A separate browser dialogue completed its two turns,
+  retained the original goal and all three constraints, and returned two sources
+  with three quotations for `openChatDatabase`. Reload restored both answers,
+  memory and sources. The real 24-turn benchmark and production build were not
+  repeated for this focused fix; the existing report records the initial prompt.

@@ -8,6 +8,15 @@ import { assertContextFits, countChatPrompt } from "./token-counter";
 
 const kinds = ["clarifications", "constraints", "terms"] as const;
 
+function memoryEvidenceOptions(content: string) {
+  const limit = RAG_CHAT_CONFIG.maxMemoryCharacters;
+  const fragments = [content, ...content.split(/\n\s*\n/)];
+  for (let start = 0; start < content.length; start += limit / 2) fragments.push(content.slice(start, start + limit));
+  return [...new Set(fragments.map((fragment) => fragment.trim()))]
+    .filter((fragment) => fragment.length > 0 && fragment.length <= limit)
+    .map((fragment, index) => ({ id: `E${index + 1}`, text: fragment }));
+}
+
 function object(value: unknown, keys: readonly string[]): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length !== keys.length || keys.some((key) => !Object.hasOwn(value, key))) throw new RagError("Неверная структура памяти задачи.", 502);
   return value as Record<string, unknown>;
@@ -39,28 +48,30 @@ export function validateRagTaskState(value: unknown): RagTaskState {
 export function applyTaskMemoryPatch(previous: RagTaskState, decoded: unknown, content: string, turn: number) {
   const patch = object(decoded, ["goal", "upsert", "remove", "question"]);
   const state = structuredClone(validateRagTaskState(previous));
-  const evidence = (value: unknown) => {
-    const quote = text(value);
+  const options = memoryEvidenceOptions(content);
+  const evidence = (id: unknown) => {
+    const quote = options.find((option) => option.id === id)?.text;
+    if (!quote) throw new RagError("Уточнение памяти ссылается на отсутствующий фрагмент текущего сообщения.", 502);
     if (!content.includes(quote)) throw new RagError("Уточнение памяти не подтверждено текущим сообщением пользователя.", 502);
     return quote;
   };
   if (patch.goal !== null) {
-    const goal = object(patch.goal, ["value", "evidence"]);
-    state.goal = { value: text(goal.value), evidence: evidence(goal.evidence), turn };
+    const goal = object(patch.goal, ["value", "evidenceId"]);
+    state.goal = { value: text(goal.value), evidence: evidence(goal.evidenceId), turn };
   }
   const seen = new Set<string>();
   for (const action of ["upsert", "remove"] as const) {
     const rows = patch[action];
     if (!Array.isArray(rows) || rows.length > RAG_CHAT_CONFIG.maxMemoryEntries * kinds.length) throw new RagError("Неверный список изменений памяти.", 502);
     for (const input of rows) {
-      const row = object(input, action === "upsert" ? ["kind", "key", "value", "evidence"] : ["kind", "key", "evidence"]);
+      const row = object(input, action === "upsert" ? ["kind", "key", "value", "evidenceId"] : ["kind", "key", "evidenceId"]);
       if (!kinds.includes(row.kind as typeof kinds[number])) throw new RagError("Неизвестный вид уточнения памяти.", 502);
       const kind = row.kind as typeof kinds[number];
       const key = text(row.key);
       const identity = JSON.stringify([kind, key]);
       if (seen.has(identity)) throw new RagError("Изменение одного ключа памяти повторяется.", 502);
       seen.add(identity);
-      const quote = evidence(row.evidence);
+      const quote = evidence(row.evidenceId);
       const index = state[kind].findIndex((entry) => entry.key === key);
       if (action === "remove") {
         if (index < 0) throw new RagError("Нельзя отменить отсутствующее уточнение памяти.", 502);
@@ -79,7 +90,7 @@ export function applyTaskMemoryPatch(previous: RagTaskState, decoded: unknown, c
 }
 
 export async function updateRagTaskMemory(llm: CompressionLlmResponder, previousState: RagTaskState, history: ChatMessage[], content: string, turn: number, signal: AbortSignal) {
-  const request = JSON.stringify({ previousState, history, content });
+  const request = JSON.stringify({ previousState, history, content, evidenceOptions: memoryEvidenceOptions(content) });
   assertContextFits(await countChatPrompt({ systemMessages: [RAG_TASK_MEMORY_PROMPT], history: [], request, reservedOutputTokens: RAG_CONFIG.maxOutputTokens }));
   signal.throwIfAborted();
   const response = await llm.respond([{ role: "user", content: request }], signal, { systemMessages: [RAG_TASK_MEMORY_PROMPT], strictStream: true, maxOutputTokens: RAG_CONFIG.maxOutputTokens });
