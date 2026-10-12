@@ -11,6 +11,7 @@ them against the current sources before relying on them.
 - [challenge-branch-workflow.md](challenge-branch-workflow.md) — `day-N` branch workflow, README conventions, and the user-approved README size exception.
 - [keep-dev-server-running.md](keep-dev-server-running.md) — the user watches the app over the server's internal network address; never leave the dev server stopped.
 - [fluid-fullwidth-layouts.md](fluid-fullwidth-layouts.md) — user requirement: fully fluid full-viewport layouts instead of fixed-width containers.
+- [self-hosted-llm.md](self-hosted-llm.md) — identical sanitized vLLM/LiteLLM deployment snapshots for Days 26, 27, 29, and 30.
 
 ## Days
 

@@ -1,0 +1,27 @@
+# ── Qwen3.8-27B, PP=8, без MTP (базовый) ──────────────────────────────
+# VLLM_ARGS="philbert440/Qwen3.8-27B-W4A16-AWQ --served-model-name qwen3.8 --tensor-parallel-size 1 --pipeline-parallel-size 8 --enable-prefix-caching --mamba-cache-mode align --max-model-len 262144 --gpu-memory-utilization 0.93 --dtype bfloat16 --kv-cache-dtype auto --max-num-seqs 6 --max-num-batched-tokens 16384 --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --trust-remote-code --limit-mm-per-prompt.image 4 --limit-mm-per-prompt.video 1 --mm-processor-cache-gb 4 --media-io-kwargs '{\"video\": {\"backend\": \"torchcodec\", \"seek_mode\": \"approximate\"}}' --default-chat-template-kwargs '{\"enable_thinking\": true, \"reasoning_effort\": \"medium\"}' --port 8000 --host 0.0.0.0"
+
+# ── Qwen3.8-27B, PP=8, vision (картинки), контекст 256k ────────────────
+# VLLM_ARGS="philbert440/Qwen3.8-27B-W4A16-AWQ --served-model-name qwen3.8 --tensor-parallel-size 1 --pipeline-parallel-size 8 --enable-prefix-caching --mamba-cache-mode align --max-model-len 393216 --gpu-memory-utilization 0.92 --dtype bfloat16 --kv-cache-dtype fp8 --max-num-seqs 4 --max-num-batched-tokens 8192 --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --trust-remote-code --limit-mm-per-prompt.image 4 --limit-mm-per-prompt.video 0 --default-chat-template-kwargs '{\"enable_thinking\": true, \"reasoning_effort\": \"medium\"}' --hf-overrides '{\"text_config\": {\"max_position_embeddings\": 393216, \"rope_parameters\": {\"rope_type\": \"yarn\", \"rope_theta\": 10000000, \"partial_rotary_factor\": 0.25, \"factor\": 2.0, \"original_max_position_embeddings\": 262144, \"mrope_interleaved\": true, \"mrope_section\": [11, 11, 10]}}}' --structured-outputs-config '{\"backend\": \"guidance\"}' --port 8000 --host 0.0.0.0"
+# VLLM_PP_LAYER_PARTITION=10,9,9,9,9,8,8,2
+
+# Twu31 400k
+# VLLM_ARGS="Twu31/Qwen3.8-27B-AWQ-INT4-MTP-LowLatency --served-model-name qwen3.8 --tensor-parallel-size 1 --pipeline-parallel-size 8 --enable-prefix-caching --mamba-cache-mode align --max-model-len 393216 --gpu-memory-utilization 0.93 --dtype bfloat16 --kv-cache-dtype fp8 --max-num-seqs 4 --max-num-batched-tokens 8192 --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --trust-remote-code --limit-mm-per-prompt.image 4 --limit-mm-per-prompt.video 0 --default-chat-template-kwargs '{\"enable_thinking\": true, \"reasoning_effort\": \"medium\"}' --hf-overrides '{\"text_config\": {\"max_position_embeddings\": 393216, \"rope_parameters\": {\"rope_type\": \"yarn\", \"rope_theta\": 10000000, \"partial_rotary_factor\": 0.25, \"factor\": 2.0, \"original_max_position_embeddings\": 262144, \"mrope_interleaved\": true, \"mrope_section\": [11, 11, 10]}}}' --structured-outputs-config '{\"backend\": \"guidance\"}' --enable-prompt-tokens-details --kv-cache-memory=1717986918 --port 8000 --host 0.0.0.0"
+# VLLM_PP_LAYER_PARTITION=8,8,8,8,8,8,8,8
+
+# Twu31 262k
+VLLM_ARGS="Twu31/Qwen3.8-27B-AWQ-INT4-MTP-LowLatency --served-model-name qwen3.8 --tensor-parallel-size 1 --pipeline-parallel-size 8 --enable-prefix-caching --mamba-cache-mode align --max-model-len 262144 --gpu-memory-utilization 0.93 --dtype bfloat16 --kv-cache-dtype fp8 --max-num-seqs 4 --max-num-batched-tokens 8192 --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --trust-remote-code --limit-mm-per-prompt.image 4 --limit-mm-per-prompt.video 0 --default-chat-template-kwargs '{\"enable_thinking\": true, \"reasoning_effort\": \"medium\"}' --structured-outputs-config '{\"backend\": \"guidance\"}' --enable-prompt-tokens-details --kv-cache-memory=1717986918 --port 8000 --host 0.0.0.0"
+VLLM_PP_LAYER_PARTITION=8,8,8,8,8,8,8,8
+
+# without YaRN
+# VLLM_ARGS="philbert440/Qwen3.8-27B-W4A16-AWQ --served-model-name qwen3.8 --tensor-parallel-size 1 --pipeline-parallel-size 8 --enable-prefix-caching --mamba-cache-mode align --max-model-len 262144 --gpu-memory-utilization 0.93 --dtype bfloat16 --kv-cache-dtype fp8 --max-num-seqs 4 --max-num-batched-tokens 8192 --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --trust-remote-code --limit-mm-per-prompt.image 1 --limit-mm-per-prompt.video 0 --default-chat-template-kwargs '{\"enable_thinking\": true, \"reasoning_effort\": \"medium\"}' --port 8000 --host 0.0.0.0"
+
+# ── Qwen3.8-27B, PP=8, vision (картинки), контекст 256k + MTP ────────────────
+# VLLM_ARGS="philbert440/Qwen3.8-27B-W4A16-AWQ --served-model-name qwen3.8 --tensor-parallel-size 1 --pipeline-parallel-size 8 --enable-prefix-caching --mamba-cache-mode align --max-model-len 131072 --gpu-memory-utilization 0.96 --dtype bfloat16 --kv-cache-dtype auto --max-num-seqs 16 --max-num-batched-tokens 8192 --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --trust-remote-code --limit-mm-per-prompt.image 1 --limit-mm-per-prompt.video 0 --default-chat-template-kwargs '{\"enable_thinking\": true, \"reasoning_effort\": \"medium\"}' --speculative-config '{\"method\":\"mtp\",\"num_speculative_tokens\":2,\"draft_embed_quant_bits\":4}' --port 8000 --host 0.0.0.0 "
+# VLLM_PP_LAYER_PARTITION=10,9,9,9,9,9,8,1
+
+# Тег образа. Меняешь на vllm-mtp:local после сборки патча.
+VLLM_IMAGE=vllm/vllm-openai:qwen38-x86_64-cu129
+# VLLM_IMAGE=vllm-mtp:local
+
+HF_TOKEN=

@@ -1,0 +1,23 @@
+model_list:
+  - model_name: qwen3.8-medium
+    litellm_params:
+      model: openai/qwen3.8
+      api_base: "http://vllm:8000/v1"
+      api_key: "None"
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: true
+          reasoning_effort: "medium"
+  - model_name: qwen3.8-xhigh
+    litellm_params:
+      model: openai/qwen3.8
+      api_base: "http://vllm:8000/v1"
+      api_key: "None"
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: true
+          reasoning_effort: "xhigh"
+  - model_name: title-maker
+    litellm_params:
+      model: groq/llama-3.1-8b-instant
+      api_key: os.environ/GROQ_API_KEY

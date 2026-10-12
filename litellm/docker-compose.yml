@@ -1,0 +1,17 @@
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-router
+    ports:
+      - "4000:4000"
+    networks:
+      - llm
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    env_file:
+      - .env
+    command: [ "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8" ]
+    restart: always
+networks:
+  llm:
+    external: true

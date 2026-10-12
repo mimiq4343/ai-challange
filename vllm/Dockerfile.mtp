@@ -1,0 +1,8 @@
+FROM vllm/vllm-openai:qwen38-x86_64-cu129
+
+# PR #44698 - MTP speculative decoding under pipeline parallelism.
+# Pure-Python patch: CUDA extensions from the base image are reused as-is.
+COPY patches/overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/
+
+RUN python3 -c "import vllm.v1.worker.pp_spec_broadcast, vllm.model_executor.layers.quantized_draft_embedding, vllm.config.speculative; print('mtp-pp overlay ok')" \
+ && find /usr/local/lib/python3.12/dist-packages/vllm -name '__pycache__' -type d -prune -exec rm -rf {} +

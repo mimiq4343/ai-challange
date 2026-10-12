@@ -1,0 +1,39 @@
+services:
+  vllm:
+    image: ${VLLM_IMAGE}
+    container_name: vllm
+    restart: unless-stopped
+    entrypoint: ["/bin/bash", "-c"]
+    command: ["eval vllm serve $$VLLM_ARGS"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - /data/models:/root/.cache/huggingface
+      - ./.cache/vllm:/root/.cache/vllm
+      - ./.cache/flashinfer:/root/.cache/flashinfer
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    environment:
+      - NCCL_IB_DISABLE=1
+      - NCCL_P2P_LEVEL=PHB
+      - VLLM_SKIP_P2P_CHECK=1
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      - NVIDIA_VISIBLE_DEVICES=all
+      - VLLM_ARGS=${VLLM_ARGS}
+      - HF_TOKEN=${HF_TOKEN}
+    networks:
+      - llm
+    shm_size: '32g'
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+networks:
+  llm:
+    external: true

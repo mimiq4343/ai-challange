@@ -39,6 +39,9 @@ Its strict answer/source/quote contract and weak-context refusal were approved
 in chat; all ten measured answers, quotations and limitations are in
 [`reports/day-24/rag-quality.md`](reports/day-24/rag-quality.md).
 
+The shared sanitized vLLM/LiteLLM deployment snapshot for Days 26, 27, 29,
+and 30 is recorded in [`memory/self-hosted-llm.md`](memory/self-hosted-llm.md).
+
 ## Superpowers designs
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:
