@@ -14,7 +14,7 @@ them against the current sources before relying on them.
 
 ## Days
 
-- [day-7.md](day-7.md) — persistent conversations, `SqliteConversationStore`, `PersistentChatAgent`, `/api/conversations`.
+- [day-7.md](day-7.md) — persistent conversations, SQLite/API contracts and deletion recovery for stale browser lists.
 - [day-8.md](day-8.md) — token accounting, provider usage as source of truth, the single real overflow run.
 - [day-9.md](day-9.md) — immutable summary checkpoints, `CompressedChatAgent`, blind benchmark results.
 - [day-10.md](day-10.md) — Sliding Window, Sticky Facts and Branching strategies with their benchmark numbers.
@@ -33,6 +33,7 @@ them against the current sources before relying on them.
 - [day-22.md](day-22.md) — arbitrary RAG questions, local E5 embeddings after the OpenRouter quota, ten-question comparison and measured limitations.
 - [day-23.md](day-23.md) — query rewrite, LLM reranking, adjustable relevance threshold and top-k, three-mode comparison and empty-context behavior.
 - [day-24.md](day-24.md) — mandatory source metadata and verbatim quotes, deterministic weak-context refusal, ten-question grounding evaluation and semantic limitations.
+- [day-25.md](day-25.md) — conversational RAG, persisted task memory with user provenance, atomic source snapshots and stale-history protection.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

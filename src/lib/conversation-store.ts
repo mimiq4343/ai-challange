@@ -3,6 +3,8 @@ import { join } from "node:path";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { ensureConversationSchema } from "./conversation-schema";
 import { openChatDatabase, releaseChatDatabase } from "./sqlite-database";
+import { checkRagChatCursor, ensureRagChatSchema, readRagChatExchanges, writeRagChatExchange } from "./rag-chat-store";
+import { emptyRagTaskState, type RagChatCommit, type RagChatSnapshot } from "./rag-chat-types";
 import type {
   ConversationSummary,
   ExchangeUsageInput,
@@ -495,6 +497,7 @@ export class SqliteConversationStore {
     assistantContent: string,
     usage?: ExchangeUsageInput,
     compression?: ExchangeCompressionInput,
+    rag?: RagChatCommit,
   ): ConversationSummary {
     const conversation = this.getConversation(conversationId);
     if (!conversation) throw new ConversationNotFoundError(conversationId);
@@ -509,8 +512,10 @@ export class SqliteConversationStore {
           NEW_CONVERSATION_TITLE)
         : conversation.title;
 
+    if (rag) ensureRagChatSchema(this.database);
     this.database.exec("BEGIN IMMEDIATE");
     try {
+      if (rag) checkRagChatCursor(this.database, conversationId, rag.expectedLastMessageId);
       if (compression?.summaryId !== null && compression?.summaryId !== undefined) {
         const summary = this.getSummaryConversationStatement.get(
           compression.summaryId,
@@ -564,6 +569,7 @@ export class SqliteConversationStore {
         );
       }
       this.updateConversationStatement.run(title, timestamp, conversationId);
+      if (rag) writeRagChatExchange(this.database, conversationId, assistantMessageId, rag);
       this.database.exec("COMMIT");
     } catch (error) {
       this.database.exec("ROLLBACK");
@@ -571,6 +577,21 @@ export class SqliteConversationStore {
     }
 
     return { ...conversation, title, updatedAt: timestamp };
+  }
+
+  getRagChat(conversationId: string): RagChatSnapshot | null {
+    ensureRagChatSchema(this.database);
+    this.database.exec("BEGIN");
+    try {
+      const conversation = this.getConversation(conversationId);
+      const exchanges = conversation ? readRagChatExchanges(this.database, conversationId) : [];
+      const detail = conversation ? { conversation, messages: this.getMessages(conversationId), exchanges, taskState: exchanges.at(-1)?.taskState ?? emptyRagTaskState() } : null;
+      this.database.exec("COMMIT");
+      return detail;
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   getConversationUsage(conversationId: string): StoredExchangeUsage[] {

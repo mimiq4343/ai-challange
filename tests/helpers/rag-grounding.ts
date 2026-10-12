@@ -16,7 +16,7 @@ export function groundingLlm(handler?: (prompt: string, payload: string) => stri
       const source = JSON.parse(payload).context[0];
       text = JSON.stringify({ status: "answered", answer: "Оба сообщения сохраняются атомарно [S1].", clarification: null,
         sources: [{ id: source.id, source: source.source, section: source.section, chunkId: source.chunkId }],
-        quotes: [{ sourceId: source.id, text: "Atomic transactions commit both messages." }] });
+        quotes: [source.quoteOptions ? { sourceId: source.id, quoteId: source.quoteOptions.find((option: { text: string }) => option.text.includes("Atomic transactions commit both messages.")).id } : { sourceId: source.id, text: "Atomic transactions commit both messages." }] });
     }
     if (text === undefined && prompt.includes("GROUNDING_JUDGE")) text = JSON.stringify({ supported: true, rationale: "Цитата подтверждает атомарное сохранение обоих сообщений.", unsupportedClaims: [] });
     if (text === undefined) return stages.respond(messages, signal, options);

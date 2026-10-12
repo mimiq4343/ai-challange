@@ -35,6 +35,22 @@ test("below-threshold context returns unknown with clarification without a gener
   assert.equal(answer.usage.totalTokens, 100);
 });
 
+test("source ID examples in Markdown code are data; visible unknown citations still fail", async (t) => {
+  const index = await refinementIndex(t);
+  for (const suffix of ["В документации приведён пример `[S1]`–`[S5]`.", "Пример: `` `[S99]` ``.", "```text\n[S99]\n```", "    [S99]"]) {
+    const llm = groundingLlm((prompt, payload) => {
+      if (!prompt.includes("GROUNDED_RAG_ANSWER")) return;
+      const source = JSON.parse(payload).context[0];
+      return JSON.stringify({ status: "answered", answer: `Оба сообщения сохраняются атомарно [S1].\n\n${suffix}`, clarification: null,
+        sources: [{ id: source.id, source: source.source, section: source.section, chunkId: source.chunkId }],
+        quotes: [{ sourceId: source.id, text: "Atomic transactions commit both messages." }] });
+    });
+    const answer = await new GroundedRagAgent(llm, { index, embedder: testEmbedder }).respond("Вопрос", testSettings, new AbortController().signal);
+    assert.deepEqual(answer.result.citations, ["S1"]);
+    assert.ok(answer.result.answer.includes(suffix));
+  }
+});
+
 test("unverifiable quotes, invented sources and missing evidence fail explicitly", async (t) => {
   const index = await refinementIndex(t);
   for (const mutation of ["quote", "source", "section", "chunk", "no_quotes", "no_sources", "foreign_reference", "no_reference", "unquoted_source", "extra", "empty", "json"]) {

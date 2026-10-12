@@ -25,7 +25,28 @@ export function ConversationSidebar({
 }: ConversationSidebarProps) {
   const [deleteTarget, setDeleteTarget] = useState<ConversationSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!open || window.matchMedia("(min-width: 1024px)").matches) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const panel = sidebarRef.current;
+    const controls = () => Array.from(panel?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], [tabindex='0']") ?? []);
+    controls()[0]?.focus();
+    function trapFocus(event: KeyboardEvent) {
+      if (event.key !== "Tab" || deleteTarget || window.matchMedia("(min-width: 1024px)").matches) return;
+      const targets = controls();
+      const first = targets[0];
+      const last = targets.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener("keydown", trapFocus);
+    return () => { document.removeEventListener("keydown", trapFocus); if (previous?.isConnected) previous.focus(); };
+  }, [open, deleteTarget]);
 
   useEffect(() => {
     if (deleteTarget) cancelRef.current?.focus();
@@ -45,9 +66,14 @@ export function ConversationSidebar({
   async function confirmDelete() {
     if (!deleteTarget || deleting) return;
     setDeleting(true);
+    setDeleteError(null);
     try {
       await onDelete(deleteTarget.id);
       setDeleteTarget(null);
+    } catch (error) {
+      setDeleteError(error instanceof TypeError
+        ? "Не удалось удалить диалог. Проверьте соединение и попробуйте ещё раз."
+        : error instanceof Error ? error.message : "Не удалось удалить диалог. Попробуйте ещё раз.");
     } finally {
       setDeleting(false);
     }
@@ -65,9 +91,10 @@ export function ConversationSidebar({
       )}
 
       <aside
+        ref={sidebarRef}
         id="conversation-sidebar"
         aria-label="Список диалогов"
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-line bg-surface transition-transform duration-200 motion-reduce:transition-none lg:static lg:z-auto lg:max-w-none lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-line bg-surface transition-transform duration-200 motion-reduce:transition-none lg:visible lg:static lg:z-auto lg:max-w-none lg:translate-x-0 ${open ? "visible translate-x-0" : "invisible -translate-x-full"}`}
       >
         <div className="flex items-center gap-2 border-b border-line p-3">
           <button
@@ -124,7 +151,7 @@ export function ConversationSidebar({
                       type="button"
                       disabled={disabled}
                       aria-label={`Удалить диалог «${conversation.title}»`}
-                      onClick={() => setDeleteTarget(conversation)}
+                      onClick={() => { setDeleteError(null); setDeleteTarget(conversation); }}
                       className={`flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl text-muted transition-colors hover:bg-red-400/10 hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45 ${active ? "opacity-100" : "opacity-70"}`}
                     >
                       <TrashIcon size={16} aria-hidden />
@@ -156,6 +183,7 @@ export function ConversationSidebar({
             <p className="mt-2 break-words text-sm leading-relaxed text-muted">
               «{deleteTarget.title}» и все его сообщения будут удалены без восстановления.
             </p>
+            {deleteError && <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs leading-relaxed text-red-200">{deleteError}</p>}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 ref={cancelRef}

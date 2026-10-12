@@ -74,3 +74,8 @@ data/rag-refinement-benchmark.lock
 data/rag-grounding-quality.json
 data/rag-grounding-quality.json.*.tmp
 data/rag-grounding-benchmark.lock
+
+# Локальный полный прогон диалогов Day 25
+data/rag-chat-quality.json
+data/rag-chat-quality.json.*.tmp
+data/rag-chat-benchmark.lock
