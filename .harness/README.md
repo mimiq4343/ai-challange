@@ -81,8 +81,9 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 - Day 11 was developed on a branch created from `day-8`; after the merge `main`
   carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main` and
   was merged back; Day 13 through Day 22 followed the same route, so `main` now
-  carries days 1–24. Day 22 through Day 24 integrations were explicitly approved
-  on 2026-10-06. Day 25 is developed separately after the approved Day 24 merge.
+  carries days 1–25. Day 22 through Day 24 integrations were explicitly approved
+  on 2026-10-06; Day 25 integration was approved on 2026-10-12.
+  Day 28 is developed separately from the integrated Day 25.
 - Reports belong in topical subdirectories of `reports/`, historical material in
   `archive/`; create either directory only when there is material for it.
 - This repository has no `openspec/` directory, so OpenSpec artifacts and steps do

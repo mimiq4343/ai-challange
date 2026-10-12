@@ -2,6 +2,10 @@
 
 Snapshot: 2026-10-07.
 
+Integration update: 2026-10-12. The user explicitly approved merging `day-25`
+into `main` before starting `day-28`. All 60 RAG tests, the production build
+and `git diff --check` passed before the merge.
+
 - The user approved the in-chat design and merging Day 24 into `main` before
   creating `day-25`. No separate design or plan file was requested. Main's README
   was updated as soon as the Day 25 branch appeared; application integration
