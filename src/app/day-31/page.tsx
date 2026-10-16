@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { resolve } from "node:path";
 import { DevAssistantWorkspace, type DocsIndexSummary } from "@/components/dev-assistant-workspace";
 import { SiteHeader } from "@/components/site-header";
 import { DEV_ASSISTANT_INDEX_CONFIG as CONFIG } from "@/lib/dev-assistant-config";
@@ -16,7 +15,7 @@ async function readIndexSummary(): Promise<DocsIndexSummary> {
   let report;
   try { report = store.latestReport(); } finally { store.close(); }
   if (!report) return null;
-  const root = resolve(".");
+  const root = process.cwd();
   const current = await loadDocumentCorpus(root, await projectDocumentSources(root));
   const structural = report.comparison.find((item) => item.strategy === CONFIG.strategy);
   return {

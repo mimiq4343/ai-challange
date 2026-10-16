@@ -52,7 +52,7 @@ function ExchangeView({ exchange }: { exchange: Exchange }) {
         )}
         {exchange.status === "error" && <p role="alert" className="text-sm text-red-300">{exchange.error}</p>}
         {exchange.status === "stopped" && <p className="text-sm text-muted">Запрос остановлен; неполный ответ не показан.</p>}
-        {exchange.seconds !== undefined && <p className="mt-3 text-xs text-muted">{exchange.traces.length} вызовов MCP · {exchange.seconds.toFixed(1)} с</p>}
+        {exchange.seconds !== undefined && <p className="mt-3 text-xs text-muted">Вызовов MCP: {exchange.traces.length} · {exchange.seconds.toFixed(1)} с</p>}
         {stale && <p className="mt-3 text-xs text-amber-300">Документация изменилась после индексации: выполните <code>npm run dev-assistant:index</code>.</p>}
         {unknown.length > 0 && <p className="mt-3 text-xs text-amber-300">Ссылки без найденного фрагмента: {unknown.map((id) => `[${id}]`).join(", ")}.</p>}
         {exchange.status === "done" && sources.length > 0 && (

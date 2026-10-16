@@ -32,12 +32,15 @@ Snapshot: 2026-10-17.
   the prompt now states them.
 - Bare `/help` calls only `git_branch` and never the LLM. Any other text is a
   400. `/help` exchanges are not persisted.
-- Environment finding: this agent session cannot open TCP connections to
-  loopback or the host address (`EHOSTUNREACH`, even outside the sandbox). That
-  blocks curl to the dev server, the bb CLI server, browser automation and
-  Turbopack's postcss worker (`npm run build` fails on `globals.css`). Real
-  checks therefore called `handleHelpCommand` directly; browser checks of
-  `/day-31` are left to the user.
+- Environment finding: the first agent session could not open TCP connections
+  to loopback or the host address (`EHOSTUNREACH`), which blocked curl, the bb
+  CLI, browser automation and Turbopack's postcss worker. After the environment
+  restarted, HTTP, headless browser (1440 and 390 px, reusable
+  [script](../../tests/browser/dev-assistant.mjs)) and `npm run build` passed.
+  A background `until ! pgrep -f <pattern>` watcher never exits because
+  `pgrep -f` matches its own shell; use a `[x]`-style pattern.
+- Turbopack warns that `resolve(".")` in a page traces the whole project;
+  `process.cwd()`, as used by the stores, does not.
 - `tests/mcp-network.test.ts` "compressed MCP bodies are limited after
   decompression" fails on clean `main` as well under Node 26.10; not caused by
   Day 31.
