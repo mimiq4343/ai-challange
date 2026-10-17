@@ -52,6 +52,7 @@ MCP-серверов, а также локальная индексация до
 | `day-25` | Day 25 «Мини-чат с RAG и памятью задачи» |
 | `day-28` | Day 28 «Локальная LLM + RAG» — в разработке отдельно от `main` |
 | `day-31` | Day 31 «Ассистент разработчика» |
+| `day-32` | Day 32 «Автоматизация ревью кода» — готово в отдельной ветке |
 
 ## Хронология
 
@@ -938,6 +939,28 @@ npm run test:dev-assistant
 [docs/dev-assistant.md](docs/dev-assistant.md). Реальные ответы, вызванные
 инструменты и ограничения: [отчёт Day 31](.harness/reports/day-31/help-quality.md).
 Day 31 интегрирован в `main` после согласования и проверки.
+
+### Day 32 · Автоматизация ревью кода — ветка `day-32`
+
+Реализован отдельно от `main`. GitHub Action получает diff и изменённые
+файлы PR, использует локальную E5 для RAG по документации и коду, затем
+возвращает потенциальные баги, архитектурные проблемы и рекомендации.
+Комментарий бота обновляется при новых коммитах. Отчёт доступен в Actions
+Summary, полный JSON — в артефакте. Исполняется только доверенный код base SHA.
+
+Actions Secret `OPENAI_API_KEY` и Variable `OPENAI_BASE_URL` настроены.
+Автоматические запуски начнутся после отдельно согласованного слияния
+workflow в базовую ветку PR. Day 32 пока не интегрирован в `main`.
+
+```bash
+git checkout day-32
+npm ci
+npm run review:pr -- --base <BASE_SHA> --head <HEAD_SHA> --repository owner/repo
+npm run test:code-review
+```
+
+Схема и ограничения:
+[документация Day 32](https://github.com/mimiq4343/ai-challange/blob/day-32/docs/code-review.md).
 
 ## SQLite и API Day 7–24
 
