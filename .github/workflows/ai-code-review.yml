@@ -1,0 +1,53 @@
+name: AI code review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ai-code-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # Выполняется только доверенный код base SHA. Head PR читается через Git
+      # как данные, без checkout, импорта модулей, сборки и запуска его скриптов.
+      - name: Checkout trusted base
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24.22.0"
+          package-manager-cache: false
+
+      - name: Install trusted dependencies
+        run: npm ci
+
+      - name: Review pull request
+        run: npm run review:pr -- --event "$GITHUB_EVENT_PATH"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+
+      - name: Save review report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ai-code-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: data/code-review/
+          if-no-files-found: ignore
+          retention-days: 7
