@@ -34,6 +34,7 @@ them against the current sources before relying on them.
 - [day-23.md](day-23.md) — query rewrite, LLM reranking, adjustable relevance threshold and top-k, three-mode comparison and empty-context behavior.
 - [day-24.md](day-24.md) — mandatory source metadata and verbatim quotes, deterministic weak-context refusal, ten-question grounding evaluation and semantic limitations.
 - [day-25.md](day-25.md) — conversational RAG, persisted task memory with user provenance, atomic source snapshots and stale-history protection.
+- [day-31.md](day-31.md) — developer assistant: `/help` tool-loop over a stdio project MCP server, docs RAG index, browser script and environment findings.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

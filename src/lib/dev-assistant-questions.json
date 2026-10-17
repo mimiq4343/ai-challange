@@ -1,0 +1,13 @@
+[
+  { "id": "layout", "question": "Где лежат страницы дней, API-маршруты и доменная логика проекта?", "source": "docs/architecture.md", "section": "Каталоги", "evidence": "тонкие route.ts" },
+  { "id": "naming", "question": "Что означают суффиксы store, schema и config у модулей src/lib?", "source": "docs/architecture.md", "section": "Соглашения об именах", "evidence": "`*-schema.ts`" },
+  { "id": "ndjson", "question": "Какие события приходят в NDJSON-потоке MCP-чата и что подтверждает успех?", "source": "docs/api.md", "section": "Форматы ответов", "evidence": "Успех подтверждает только `done`" },
+  { "id": "help-api", "question": "Какой маршрут принимает команду /help и какое тело запроса он ожидает?", "source": "docs/api.md", "section": "Ассистент разработчика", "evidence": "/api/dev-assistant/help" },
+  { "id": "sqlite-files", "question": "В каком файле SQLite хранится история диалогов и где лежат индексы документов?", "source": "docs/data-schema.md", "section": "Файлы", "evidence": "data/dev-assistant.sqlite" },
+  { "id": "messages-table", "question": "Как таблица messages связана с conversations и что происходит при удалении диалога?", "source": "src/lib/conversation-schema.ts", "section": "FirstStatement", "evidence": "REFERENCES conversations(id) ON DELETE CASCADE" },
+  { "id": "project-mcp", "question": "Какие инструменты есть у MCP-сервера проекта и через какой транспорт он подключается?", "source": "docs/mcp.md", "section": "MCP-сервер проекта", "evidence": "через stdin/stdout" },
+  { "id": "mcp-auth", "question": "Какие заголовки нужны защищённым путям MCP планировщика и пайплайна?", "source": "docs/mcp.md", "section": "HTTP-сервер", "evidence": "X-Flash-Profile-Id" },
+  { "id": "checks", "question": "Какие проверки нужно запустить перед вливанием дня в main?", "source": "docs/development.md", "section": "Проверки перед сдачей", "evidence": "git diff --check" },
+  { "id": "stale-index", "question": "Как ассистент понимает, что индекс документации устарел?", "source": "docs/dev-assistant.md", "section": "Индекс документации", "evidence": "`stale: true`" },
+  { "id": "secrets", "question": "Какие файлы запрещено коммитить в репозиторий?", "source": "AGENTS.md", "section": "Repository workflow", "evidence": "Do not commit `.env.local`" }
+]

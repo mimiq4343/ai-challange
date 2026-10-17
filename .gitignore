@@ -79,3 +79,8 @@ data/rag-grounding-benchmark.lock
 data/rag-chat-quality.json
 data/rag-chat-quality.json.*.tmp
 data/rag-chat-benchmark.lock
+
+# Локальный индекс документации проекта Day 31
+data/dev-assistant-index.json
+data/dev-assistant-index.json.*.tmp
+data/dev-assistant-index.lock

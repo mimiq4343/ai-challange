@@ -47,6 +47,13 @@ Measurements and semantic limitations are in
 the complete dialogues are [`history.md`](reports/day-25/history.md) and
 [`rag.md`](reports/day-25/rag.md).
 
+Day 31 decisions are recorded in [`memory/day-31.md`](memory/day-31.md).
+The user approved the stdio project MCP server, the model-driven tool-loop
+with `search_docs` beside the git tools, and branching from `main` in chat.
+Real `/help` answers, called tools and limitations are in
+[`reports/day-31/help-quality.md`](reports/day-31/help-quality.md); full answers
+are [`help-answers.md`](reports/day-31/help-answers.md).
+
 ## Superpowers designs
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:
@@ -81,9 +88,10 @@ multi-task plans are directories whose `00-overview.md` links the spec:
 - Day 11 was developed on a branch created from `day-8`; after the merge `main`
   carries Day 9, Day 10 and Day 11 together. Day 12 branched from that `main` and
   was merged back; Day 13 through Day 22 followed the same route, so `main` now
-  carries days 1–25. Day 22 through Day 24 integrations were explicitly approved
+  carries days 1–25 and Day 31. Day 22 through Day 24 integrations were explicitly approved
   on 2026-10-06; Day 25 integration was approved on 2026-10-12.
-  Day 28 is developed separately from the integrated Day 25.
+  Day 28 is developed separately from the integrated Day 25; Day 31 branched
+  from that `main` without Day 28 and was merged back on 2026-10-18.
 - Reports belong in topical subdirectories of `reports/`, historical material in
   `archive/`; create either directory only when there is material for it.
 - This repository has no `openspec/` directory, so OpenSpec artifacts and steps do
