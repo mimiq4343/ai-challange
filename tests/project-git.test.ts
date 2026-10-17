@@ -83,7 +83,24 @@ test("lists immediate children of a tracked directory", async () => {
     { name: "api.md", type: "file", files: 1 },
   ]);
   assert.deepEqual((await listTrackedEntries(root, "docs/api.md")).entries, [{ name: "api.md", type: "file", files: 1 }]);
-  await assert.rejects(listTrackedEntries(root, "missing"), /не найден среди отслеживаемых/);
+  await assert.rejects(listTrackedEntries(root, "missing"), /не существует в рабочей копии/);
+  assert.equal((await listTrackedEntries(root, "docs")).status, "tracked");
+});
+
+test("reports ignored and untracked directories without listing their contents", async () => {
+  writeFileSync(join(root, ".git/info/exclude"), "data/\n");
+  mkdirSync(join(root, "data"));
+  mkdirSync(join(root, "drafts"));
+  writeFileSync(join(root, "data/chat.sqlite"), "secret rows");
+  writeFileSync(join(root, "drafts/plan.md"), "черновик");
+  try {
+    assert.deepEqual(await listTrackedEntries(root, "data"), { path: "data", status: "ignored", totalFiles: 0, truncated: false, entries: [] });
+    assert.deepEqual(await listTrackedEntries(root, "drafts"), { path: "drafts", status: "untracked", totalFiles: 0, truncated: false, entries: [] });
+  } finally {
+    rmSync(join(root, "data"), { recursive: true });
+    rmSync(join(root, "drafts"), { recursive: true });
+    writeFileSync(join(root, ".git/info/exclude"), "");
+  }
 });
 
 test("hides untracked and ignored files from listings and diffs", async () => {

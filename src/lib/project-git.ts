@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { lstat } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { PROJECT_MCP_LIMITS as LIMITS } from "./dev-assistant-config";
 import type { ProjectFileStatus, ProjectToolOutput } from "./project-tool-schemas";
@@ -97,12 +99,30 @@ export async function readGitStatus(root: string, signal?: AbortSignal): Promise
   };
 }
 
+// `git check-ignore` завершается с кодом 1, если путь не игнорируется.
+async function isIgnored(root: string, path: string, signal?: AbortSignal): Promise<boolean> {
+  try {
+    await execFileAsync("git", ["-C", root, "check-ignore", "-q", "--", path], { timeout: LIMITS.gitTimeoutMs, signal });
+    return true;
+  } catch (cause) {
+    signal?.throwIfAborted();
+    if ((cause as { code?: unknown }).code === 1) return false;
+    throw new ProjectGitError("Команда git check-ignore завершилась ошибкой.", { cause });
+  }
+}
+
 // Непосредственное содержимое каталога среди отслеживаемых файлов, как `ls` по индексу git.
+// Неотслеживаемый или игнорируемый путь существует, но его содержимое не раскрывается.
 export async function listTrackedEntries(root: string, path: string, signal?: AbortSignal): Promise<ProjectToolOutput<"list_files">> {
   const files = (await git(root, ["ls-files", "-z", "--full-name", "--", path || "."], signal)).split("\0").filter(Boolean);
-  if (path && files.length === 0) throw new ProjectGitError(`Путь ${path} не найден среди отслеживаемых файлов.`);
+  if (path && files.length === 0) {
+    const exists = await lstat(join(root, path)).then(() => true, () => false);
+    if (!exists) throw new ProjectGitError(`Путь ${path} не существует в рабочей копии.`);
+    const status = await isIgnored(root, path, signal) ? "ignored" : "untracked";
+    return { path, status, totalFiles: 0, truncated: false, entries: [] };
+  }
   if (path && files.length === 1 && files[0] === path) {
-    return { path, totalFiles: 1, truncated: false, entries: [{ name: path.split("/").at(-1)!, type: "file", files: 1 }] };
+    return { path, status: "tracked", totalFiles: 1, truncated: false, entries: [{ name: path.split("/").at(-1)!, type: "file", files: 1 }] };
   }
   const prefix = path ? `${path}/` : "";
   const directories = new Map<string, number>();
@@ -118,7 +138,7 @@ export async function listTrackedEntries(root: string, path: string, signal?: Ab
     ...[...directories].sort(([left], [right]) => left.localeCompare(right)).map(([name, count]) => ({ name, type: "directory" as const, files: count })),
     ...plain.sort((left, right) => left.localeCompare(right)).map((name) => ({ name, type: "file" as const, files: 1 })),
   ];
-  return { path, totalFiles: files.length, truncated: entries.length > LIMITS.maxListEntries, entries: entries.slice(0, LIMITS.maxListEntries) };
+  return { path, status: "tracked", totalFiles: files.length, truncated: entries.length > LIMITS.maxListEntries, entries: entries.slice(0, LIMITS.maxListEntries) };
 }
 
 export async function readGitDiff(root: string, path: string, signal?: AbortSignal): Promise<ProjectToolOutput<"git_diff">> {

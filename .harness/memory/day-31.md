@@ -30,6 +30,11 @@ Snapshot: 2026-10-17.
   round. A real run failed once when the model asked for four tools in one
   round under a limit of three; limits became 4 per round and 10 in total, and
   the prompt now states them.
+- 2026-10-17: the user saw `list_files("data")` fail as "not found" although
+  `data/` exists. Untracked or ignored paths now return `status: untracked`
+  or `ignored` with no entries, so contents stay hidden; only a missing path
+  is an error. `data/` reports `untracked` because `.gitignore` lists files
+  inside it, not the directory.
 - Bare `/help` calls only `git_branch` and never the LLM. Any other text is a
   400. `/help` exchanges are not persisted.
 - Environment finding: the first agent session could not open TCP connections

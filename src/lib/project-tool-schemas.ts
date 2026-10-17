@@ -67,6 +67,8 @@ export const projectToolOutputSchemas = {
   }),
   list_files: z.object({
     path: z.string(),
+    // ignored и untracked: путь есть на диске, но содержимое вне git не раскрывается.
+    status: z.enum(["tracked", "ignored", "untracked"]),
     totalFiles: z.number().int(),
     truncated: z.boolean(),
     entries: z.array(z.object({ name: z.string(), type: z.enum(["directory", "file"]), files: z.number().int() })),

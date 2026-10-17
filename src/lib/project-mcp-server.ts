@@ -43,7 +43,7 @@ export function createProjectMcpServer(root: string, embedder: Pick<DocumentEmbe
     annotations: READ_ONLY,
   }, (_args, extra) => toolResult(() => readGitStatus(root, extra.signal)));
   server.registerTool("list_files", {
-    description: "Содержимое каталога среди отслеживаемых git файлов: подкаталоги с числом файлов и файлы. Без path — корень репозитория.",
+    description: "Содержимое каталога среди отслеживаемых git файлов: подкаталоги с числом файлов и файлы. Без path — корень репозитория. Для игнорируемого или неотслеживаемого пути возвращает status ignored/untracked без содержимого.",
     inputSchema: inputs.list_files,
     outputSchema: outputs.list_files,
     annotations: READ_ONLY,
