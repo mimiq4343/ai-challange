@@ -24,13 +24,14 @@ Snapshot: 2026-10-18.
   bug and a bot review comment.
   The downloaded artifact includes the actual diff/full file and three docs
   plus five code sources. The run took about 11 minutes. It used the previous
-  workflow with the refreshed base; the permanent checkout fix is prepared in
+  workflow with the refreshed base; the permanent checkout fix is in
   [PR #3](https://github.com/mimiq4343/ai-challange/pull/3).
   The user accepted the observed run and requested cleanup on 2026-10-18.
   Test #2 was closed without merging; its local and remote branch, both test
   runs (`39109220125`, `39108917433`), artifact and bot comment were removed.
-  Shared application data, model weights, automated regression tests and the
-  open checkout-fix PR #3 remain. No repeat test is pending.
+  Shared application data, model weights and automated regression tests remain.
+  After cleanup, the user explicitly authorized merging checkout-fix PR #3
+  into `main` on 2026-10-18. No repeat test is pending.
 - User correction: Day 32 must be testable in the application's `/day-32`
   page, as previous challenge days are. A CLI and GitHub Action alone did not
   satisfy their expected workflow. The approved web screen selects base/head
@@ -53,8 +54,9 @@ Snapshot: 2026-10-18.
 - The user approved the in-chat design and implementation on `day-32` from
   `main`: a GitHub Action over PR diffs, RAG over project documentation and
   source code, a Russian review comment with bugs, architecture concerns and
-  recommendations. No separate spec or plan files were requested. Integration
-  into `main` still requires an explicit request.
+  recommendations. No separate spec or plan files were requested. The user merged
+  the initial implementation via PR #1 and explicitly authorized integrating
+  the checkout fix via PR #3 on 2026-10-18.
 - [`ai-code-review.yml`](../../.github/workflows/ai-code-review.yml) uses
   `pull_request_target`. Only the exact trusted `github.workflow_sha` and its
   dependencies execute. The PR ref is fetched as Git objects and is never checked out,
