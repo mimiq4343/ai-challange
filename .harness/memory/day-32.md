@@ -11,6 +11,13 @@ Snapshot: 2026-10-18.
   The prepared PRs are [installation #1](https://github.com/mimiq4343/ai-challange/pull/1)
   and [draft pipeline test #2](https://github.com/mimiq4343/ai-challange/pull/2).
   Production build, 22 review tests and scoped ESLint passed before handoff.
+  The user merged installation #1 on 2026-10-18. The first Actions run for
+  test #2 failed because the PR's stored `base.sha` still pointed at the
+  pre-installation commit, so checkout had no `review:pr` script. The workflow
+  now executes the trusted reviewer from `github.workflow_sha`; PR base/head
+  SHAs still select the diff and RAG corpus. A real-Git checkout reproduction
+  failed with the original npm error before the fix and starts the analyzer
+  successfully after it.
 - User correction: Day 32 must be testable in the application's `/day-32`
   page, as previous challenge days are. A CLI and GitHub Action alone did not
   satisfy their expected workflow. The approved web screen selects base/head
@@ -36,8 +43,8 @@ Snapshot: 2026-10-18.
   recommendations. No separate spec or plan files were requested. Integration
   into `main` still requires an explicit request.
 - [`ai-code-review.yml`](../../.github/workflows/ai-code-review.yml) uses
-  `pull_request_target`. Only the exact trusted `base.sha` and its dependencies
-  execute. The PR ref is fetched as Git objects and is never checked out,
+  `pull_request_target`. Only the exact trusted `github.workflow_sha` and its
+  dependencies execute. The PR ref is fetched as Git objects and is never checked out,
   imported, built or tested with secrets. Dependency caching is disabled;
   third-party Actions are pinned to immutable commits, Node.js to `24.22.0`.
 - [`code-review-git.ts`](../../src/lib/code-review-git.ts) computes a three-dot
