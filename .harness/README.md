@@ -78,9 +78,10 @@ The user approved the project-file MCP tools, document-only writes and diff
 application in chat. Real search/create/update probes and browser checks are
 recorded in [`reports/day-34/quality.md`](reports/day-34/quality.md); the product
 guide is [`../docs/file-assistant.md`](../docs/file-assistant.md).
-The separate `main` timeline update is prepared as
-[`main-readme.patch`](reports/day-34/main-readme.patch), pending explicit approval
-after automatic permission review rejected modifying the shared branch.
+The user repeated the ADR scenario, applied the proposal and explicitly approved
+integration into `main` on 2026-10-18. The full integration supersedes the earlier
+standalone timeline patch. The production build and all 131 focused file,
+MCP, orchestration and developer-assistant tests passed before integration.
 
 ## Superpowers designs
 

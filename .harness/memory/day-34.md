@@ -5,11 +5,14 @@ Snapshot: 2026-10-18.
 - The user approved the in-chat design and implementation on `day-34` from
   `main`: `/day-34` reuses Flash Dev with real stdio MCP, source search,
   document generation/updates and a separate Apply action. Design and planning
-  stay in chat. Integration into `main` has not been requested.
-- The separate `main` README update was rejected by automatic permission review
-  because the current instruction authorized `day-34`, not shared-branch
-  mutation. The [README-only patch](../reports/day-34/main-readme.patch) is
-  prepared; `main` remains unchanged pending explicit approval.
+  stay in chat. On 2026-10-18, the user repeated the ADR scenario, applied the
+  proposal and explicitly approved merging `day-34` into `main`.
+- The earlier standalone README patch is superseded by the approved full
+  integration. The consolidated README records Day 34 as available in `main`.
+- Integration checks on 2026-10-18 passed: production build, 131 focused file,
+  MCP, orchestration and developer-assistant tests, and `git diff --check`.
+  The user's applied `docs/adr/file-assistant.md` was already untracked at
+  integration start; it is preserved locally outside the merge commits.
 - The `files` mode adds `read_file`, `search_files` and `propose_file` beside
   branch/status/listing tools. It excludes the old raw diff and RAG search to
   preserve the new file access boundary. Day 31 remains read-only with its
