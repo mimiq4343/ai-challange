@@ -106,6 +106,34 @@ test("does not invent a tool execution when the model answers directly", async (
   assert.deepEqual(events, []);
 });
 
+for (const markup of [
+  '<｜DSML｜calls><｜DSML｜invoke name="get_repository_info"></｜DSML｜invoke></｜DSML｜calls>',
+  'Сейчас проверю. <|DSML|function_calls><|DSML|invoke name="get_repository_info">',
+  'Пример: `<｜DSML｜calls>`.\n\n<｜DSML｜calls><｜DSML｜invoke name="get_repository_info">',
+]) {
+  test(`rejects tool markup in answer text without executing it: ${markup.slice(0, 25)}`, async () => {
+    const events: McpToolEvent[] = [];
+    const { requests, executions } = boundary(() => answer(markup));
+    await assert.rejects(agent(events).respond(messages, AbortSignal.timeout(5_000)), /служебн.*DSML/i);
+    assert.equal(requests.length, 1);
+    assert.deepEqual(executions, []);
+    assert.deepEqual(events, []);
+  });
+}
+
+for (const text of [
+  'Пример служебного формата: `<｜DSML｜calls>`; приложение использует JSON tool_calls.',
+  'Пример для анализа:\n\n```text\n<｜DSML｜calls><｜DSML｜invoke name="read_file">\n```\n\nЭто цитата, вызовов не было.',
+  '> <｜DSML｜calls>\n\nТак выглядит цитата служебного формата.',
+]) {
+  test(`accepts quoted tool markup as an explanation: ${text.slice(0, 30)}`, async () => {
+    const { executions } = boundary(() => answer(text));
+    const response = await agent().respond(messages, AbortSignal.timeout(5_000));
+    assert.equal(await new Response(response.stream).text(), text);
+    assert.deepEqual(executions, []);
+  });
+}
+
 test("passes an MCP isError result to the model and UI without fabricating success", async () => {
   const failure = { content: [{ type: "text", text: "GitHub returned 404" }], structuredContent: { status: 404 }, isError: true };
   const events: McpToolEvent[] = [];

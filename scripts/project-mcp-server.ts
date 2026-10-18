@@ -12,7 +12,7 @@ if (!root) {
   process.exit(2);
 }
 const embedder = new LocalDocumentEmbeddingClient(resolve(RAG_EMBEDDING_CONFIG.modelPath));
-createProjectMcpServer(resolve(root), embedder).connect(new StdioServerTransport()).catch((error: unknown) => {
+createProjectMcpServer(resolve(root), embedder, process.argv[3] === "--files").connect(new StdioServerTransport()).catch((error: unknown) => {
   console.error("project_mcp_failed", error instanceof Error ? error.message : "UnknownError");
   process.exitCode = 1;
 });

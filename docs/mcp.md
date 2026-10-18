@@ -50,6 +50,15 @@ Git вызывается через `execFile` без shell, с `--literal-paths
 `list_files` и `git_diff` видят только отслеживаемые файлы, поэтому
 `.env.local` и `data/*.sqlite` в результаты не попадают.
 
+### Файловый режим проекта — Day 34
+
+Тот же stdio-сервер с `--files` обслуживает `/day-34`. К `git_branch`,
+`git_status` и `list_files` добавляются `read_file`, `search_files` и
+`propose_file`. `search_docs` и необработанный `git_diff` в этом режиме
+не объявляются. Предложения применяются отдельной кнопкой через HTTP;
+у модели нет инструмента непосредственной записи. Границы доступа и форматы
+описаны в [file-assistant.md](file-assistant.md).
+
 ## Клиенты и агенты
 
 - `src/lib/mcp-client.ts` — `withMcpTools(endpoint, signal, operation)`:

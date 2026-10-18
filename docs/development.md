@@ -49,6 +49,7 @@ npm run dev
 | `npm run test:mcp`, `test:scheduler`, `test:pipeline`, `test:orchestration` | Day 16–20 |
 | `npm run test:documents`, `test:rag` | Day 21–25 |
 | `npm run test:dev-assistant` | Day 31: MCP-сервер проекта, git, команда `/help` |
+| `npm run test:files` | Day 34: реальные файлы, границы доступа, diff, stdio MCP и HTTP |
 | `npm run test:code-review` | Day 32: снимок PR, RAG, ответы LLM, CLI и комментарий GitHub |
 
 ## Проверки перед сдачей

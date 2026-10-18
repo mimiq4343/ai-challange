@@ -1,6 +1,7 @@
 import { ChatAgentError, parseProviderUsage } from "./chat-agent";
 import type { ProviderTokenUsage } from "./conversation-types";
 import { MCP_TOOL_CHAT_LIMITS as LIMITS } from "./mcp-config";
+import { fromMarkdown } from "mdast-util-from-markdown";
 
 export type ProviderToolCall = {
   id: string;
@@ -19,12 +20,27 @@ function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function hasUnquotedToolMarkup(text: string): boolean {
+  const marker = /<\s*[|｜]\s*DSML\s*[|｜]\s*(?:function_calls|calls|invoke|parameter)\b/iu;
+  if (!marker.test(text)) return false;
+  type Node = { type: string; value?: string; children?: Node[] };
+  const nodes: Node[] = [fromMarkdown(text)];
+  while (nodes.length) {
+    const node = nodes.pop()!;
+    if (node.type === "code" || node.type === "inlineCode" || node.type === "blockquote") continue;
+    if (node.value && marker.test(node.value)) return true;
+    if (node.children) nodes.push(...node.children);
+  }
+  return false;
+}
+
 // Общий текстовый адаптер Day 8 намеренно терпим к повреждённым SSE-строкам.
 // Здесь нельзя исполнять частичный tool_call или сохранять усечённый ответ.
 export async function readMcpProviderRound(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
   maxToolsPerRound: number = LIMITS.maxToolsPerRound,
+  maxArgumentsBytes: number = LIMITS.maxArgumentsBytes,
 ): Promise<ProviderToolRound> {
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -82,7 +98,7 @@ export async function readMcpProviderRound(
             if (typeof value === "string") call.function[key] += value;
           }
         }
-        if (Buffer.byteLength(call.id) > LIMITS.maxCallIdBytes || Buffer.byteLength(call.function.name) > LIMITS.maxCallIdBytes || Buffer.byteLength(call.function.arguments) > LIMITS.maxArgumentsBytes) {
+        if (Buffer.byteLength(call.id) > LIMITS.maxCallIdBytes || Buffer.byteLength(call.function.name) > LIMITS.maxCallIdBytes || Buffer.byteLength(call.function.arguments) > maxArgumentsBytes) {
           throw new ChatAgentError("Вызов инструмента превышает допустимый размер.", "upstream");
         }
         calls.set(index, call);
@@ -129,6 +145,10 @@ export async function readMcpProviderRound(
     buffer += decoder.decode();
     if (!done || buffer.trim() || eventData.length || !finishReason) throw malformed();
     if ((finishReason === "tool_calls") !== (calls.size > 0) || (finishReason === "stop" && !content.trim())) throw malformed();
+    // Служебная разметка провайдера не является ни ответом, ни JSON tool_call.
+    if (hasUnquotedToolMarkup(content)) {
+      throw new ChatAgentError("API вернул служебную разметку DSML вместо структурированного ответа. Запрос не завершён.", "upstream");
+    }
     const ordered = [...calls.entries()].sort(([left], [right]) => left - right);
     if (ordered.some(([index, call], position) => index !== position || !call.id || !call.function.name || !call.function.arguments)) throw malformed();
     return { content, reasoning_content: reasoning, tool_calls: ordered.map(([, call]) => call), usage: invalidUsage ? null : usage };

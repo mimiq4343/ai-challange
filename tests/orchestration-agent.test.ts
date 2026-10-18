@@ -31,7 +31,7 @@ const FAKE_SERVERS: Record<string, { id: ServerId; tools: string[]; token?: stri
 
 type Call = { name: string; arguments: Record<string, unknown> };
 type Execution = { server: ServerId; tool: string; arguments: Record<string, unknown> };
-type ProviderRequest = { messages: Record<string, unknown>[]; tools?: { function: { name: string } }[] };
+type ProviderRequest = { messages: Record<string, unknown>[]; tools?: { function: { name: string } }[]; tool_choice?: string };
 
 const scenario: Call[] = [
   { name: "pipeline__search_repositories", arguments: { query: "sqlite language:TypeScript" } },
@@ -213,12 +213,13 @@ test("a transport failure on one server becomes a failed step and the flow conti
 
 test("after the call budget the model must summarise without tools instead of failing the flow", async () => {
   const { executions, requests } = boundary({
-    provider: (request, round) => request.tools ? selection({ name: "flash__get_repository_info", arguments: { owner: "owner", repo: `repo-${round}` } }, round) : final(),
+    provider: (request, round) => request.tool_choice === "none" ? final() : selection({ name: "flash__get_repository_info", arguments: { owner: "owner", repo: `repo-${round}` } }, round),
   });
   const response = await agent().respond(messages, AbortSignal.timeout(5_000));
   assert.equal(await new Response(response.stream).text(), "Готово: шаги выполнены.");
   assert.equal(executions.length, ORCHESTRATION_LIMITS.maxToolCalls);
-  assert.equal(requests.at(-1)?.tools, undefined);
+  assert.equal(requests.at(-1)?.tool_choice, "none");
+  assert.deepEqual(requests.at(-1)?.tools, requests[0].tools);
 });
 
 test("orchestration refuses a single endpoint override or missing credentials before network access", () => {

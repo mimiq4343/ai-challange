@@ -73,6 +73,16 @@ Real support answers, browser checks and verification limits are recorded in
 The user approved integration into `main` on 2026-10-18; the production build
 and all 11 support tests passed before integration.
 
+Day 34 decisions are recorded in [`memory/day-34.md`](memory/day-34.md).
+The user approved the project-file MCP tools, document-only writes and diff
+application in chat. Real search/create/update probes and browser checks are
+recorded in [`reports/day-34/quality.md`](reports/day-34/quality.md); the product
+guide is [`../docs/file-assistant.md`](../docs/file-assistant.md).
+The user repeated the ADR scenario, applied the proposal and explicitly approved
+integration into `main` on 2026-10-18. The full integration supersedes the earlier
+standalone timeline patch. The production build and all 131 focused file,
+MCP, orchestration and developer-assistant tests passed before integration.
+
 ## Superpowers designs
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:
