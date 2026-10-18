@@ -10,7 +10,7 @@ const LAST_DAY = 25;
 const DAY_LINKS = [...Array.from({ length: LAST_DAY - FIRST_DAY + 1 }, (_, index) => {
   const day = FIRST_DAY + index;
   return { href: `/day-${day}`, label: `Day ${day}` };
-}), { href: "/day-31", label: "Day 31" }, { href: "/day-32", label: "Day 32" }, { href: "/day-33", label: "Day 33" }, { href: "/day-34", label: "Day 34" }];
+}), { href: "/day-31", label: "Day 31" }, { href: "/day-32", label: "Day 32" }, { href: "/day-33", label: "Day 33" }, { href: "/day-34", label: "Day 34" }, { href: "/day-35", label: "Day 35" }];
 
 const FOCUS_RING = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 

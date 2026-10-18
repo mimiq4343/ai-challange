@@ -109,6 +109,12 @@ data/                 локальные SQLite, модели и отчёты (�
   `project`. GitHub Action отдельно запускает CLI и публикует комментарий.
   Контракты и ограничения — в [code-review.md](code-review.md).
 
+- **Day 35.** `release-git.ts` фиксирует Git refs и использует сборщик снимков
+  Day 32. `release-agent.ts` анализирует diff через `ChatAgent`, проверяет ID
+  источников и формирует Markdown. `release-ci.ts` отдельно читает GitHub Actions
+  для точного head SHA. Предложения и применение файлов используют Flash Files.
+  `ReleaseWorkspace` показывает этапы, AI-отчёт, CI и diff, см. [release.md](release.md).
+
 ## Интерфейс
 
 Все страницы используют `SiteHeader` с выпадающим списком дней (`DayNavMenu`)

@@ -83,7 +83,16 @@ integration into `main` on 2026-10-18. The full integration supersedes the earli
 standalone timeline patch. The production build and all 131 focused file,
 MCP, orchestration and developer-assistant tests passed before integration.
 
+Day 35 decisions are recorded in [`memory/day-35.md`](memory/day-35.md).
+The user approved Flash Release in chat: immutable Git comparisons, AI release
+notes, exact-SHA GitHub Actions results and Markdown proposals through Flash Files.
+The real model/Apply run, browser regression and verification limits are in
+[`reports/day-35/quality.md`](reports/day-35/quality.md); the product guide is
+[`../docs/release.md`](../docs/release.md). Work remains on `day-35` pending
+explicit integration approval.
+
 ## Superpowers designs
+
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:
 

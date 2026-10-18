@@ -38,6 +38,7 @@ them against the current sources before relying on them.
 - [day-32.md](day-32.md) — automated PR review: Flash Dev web agent, branch comparison, trusted workflow checkout, docs/code RAG and validated findings.
 - [day-33.md](day-33.md) — Flash Support: ticket-scoped JSON MCP, FAQ RAG, atomic exchanges and browser focus findings.
 - [day-34.md](day-34.md) — Flash Files: scoped project-file MCP tools, document proposals, guarded Apply and keyboard focus verification.
+- [day-35.md](day-35.md) — Flash Release: immutable Git comparisons, AI release notes, exact-SHA Actions evidence and guarded Markdown proposals.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

@@ -18,6 +18,8 @@
   MCP, RAG по FAQ и сохранение переписки Day 33.
 - [Работа с файлами](file-assistant.md) — Flash Files, поиск по исходникам,
   создание и обновление документации с применением diff Day 34.
+- [Подготовка релиза](release.md) — Flash Release, AI release notes по Git,
+  результаты GitHub Actions и сохранение Markdown Day 35.
 
 Документы индексируются командой `npm run dev-assistant:index`. После их
 изменения индекс нужно пересоздать, иначе `/help` предупредит, что он устарел.
