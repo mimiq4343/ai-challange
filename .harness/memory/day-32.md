@@ -2,6 +2,12 @@
 
 Snapshot: 2026-10-18.
 
+- End-to-end acceptance requires a real PR event, an Actions run and a bot
+  review comment. Comparing branches on `/day-32` verifies only the analyzer.
+  The user requested pre-created installation and draft test PRs so the
+  remaining verification steps are GitHub buttons. The test branch starts
+  from the current `main`, independently of the installation branch, to keep
+  its diff limited to one seeded regression after either merge or squash.
 - User correction: Day 32 must be testable in the application's `/day-32`
   page, as previous challenge days are. A CLI and GitHub Action alone did not
   satisfy their expected workflow. The approved web screen selects base/head
