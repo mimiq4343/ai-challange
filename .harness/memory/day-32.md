@@ -18,6 +18,16 @@ Snapshot: 2026-10-18.
   SHAs still select the diff and RAG corpus. A real-Git checkout reproduction
   failed with the original npm error before the fix and starts the analyzer
   successfully after it.
+  Updating the test branch from installed `main` then triggered a successful
+  [real Actions run](https://github.com/mimiq4343/ai-challange/actions/runs/39109220125):
+  288 corpus files, 4019 chunks, one reviewed file, one high-severity array-index
+  bug and a [bot comment](https://github.com/mimiq4343/ai-challange/pull/2#issuecomment-6247414129).
+  The downloaded artifact includes the actual diff/full file and three docs
+  plus five code sources. The run took about 11 minutes. It used the previous
+  workflow with the refreshed base; the permanent checkout fix is prepared in
+  [PR #3](https://github.com/mimiq4343/ai-challange/pull/3). Test #2 is Draft again
+  so the user can merge #3, then press Ready for review to trigger the fixed
+  workflow. Do not merge the seeded test PR.
 - User correction: Day 32 must be testable in the application's `/day-32`
   page, as previous challenge days are. A CLI and GitHub Action alone did not
   satisfy their expected workflow. The approved web screen selects base/head
@@ -100,4 +110,4 @@ Snapshot: 2026-10-18.
   demonstrated the issue and passed after filtering. The full LLM run was
   not repeated after that retrieval change.
   See the [quality report](../reports/day-32/review-quality.md). Live Actions
-  publication remains unverified until integration into the PR base.
+  publication was subsequently verified with the array-index test above.
