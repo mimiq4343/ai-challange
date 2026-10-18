@@ -100,6 +100,14 @@ data/                 локальные SQLite, модели и отчёты (�
 - **Day 31.** `McpToolChatAgent` в режиме `project`, `project-mcp-server.ts`,
   `project-git.ts` и `project-docs.ts` — ассистент разработчика, см.
   [dev-assistant.md](dev-assistant.md).
+- **Day 32.** `McpToolChatAgent` в режиме `review` выбирает локальные серверные
+  инструменты `review_pr`/`review_changes` (`code-review-agent-tools.ts`).
+  Они используют общий `code-review-runner.ts`, immutable Git snapshot и
+  RAG по документации и коду. Долгое ревью выполняется в процессе сервера
+  без короткого таймаута stdio MCP-сессии. `DevAssistantWorkspace` показывает
+  вызовы, прогресс и структурированный отчёт; прежний `/help` остаётся режимом
+  `project`. GitHub Action отдельно запускает CLI и публикует комментарий.
+  Контракты и ограничения — в [code-review.md](code-review.md).
 
 ## Интерфейс
 

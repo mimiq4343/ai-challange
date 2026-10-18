@@ -10,7 +10,7 @@ const snapshotSchema = z.object({
     content: z.string(), patch: z.string(), changedLines: z.array(z.number().int().positive()) })),
   skipped: z.array(z.object({ path: z.string(), reason: z.string() })),
 });
-const eventSchema: z.ZodType<CodeReviewEvent> = z.discriminatedUnion("type", [
+export const codeReviewEventSchema: z.ZodType<CodeReviewEvent> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("progress"), message: z.string() }),
   z.object({ type: z.literal("error"), message: z.string() }),
   z.object({ type: z.literal("snapshot"), snapshot: snapshotSchema }),
@@ -32,7 +32,7 @@ export async function consumeCodeReviewStream(stream: ReadableStream<Uint8Array>
   function dispatch(line: string): boolean {
     if (!line.trim()) return false;
     let event: CodeReviewEvent;
-    try { event = eventSchema.parse(JSON.parse(line)); }
+    try { event = codeReviewEventSchema.parse(JSON.parse(line)); }
     catch (cause) { throw new Error("Некорректное событие в ответе ревью.", { cause }); }
     if (event.type === "error") throw new Error(event.message);
     onEvent(event);

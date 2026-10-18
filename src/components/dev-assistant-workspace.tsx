@@ -5,6 +5,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { McpToolCard, type McpToolTrace } from "@/components/mcp-tool-card";
+import { ReviewReport } from "@/components/code-review-report";
+import type { CodeReviewEvent, CodeReviewReport } from "@/lib/code-review-types";
 import { DEV_ASSISTANT_LIMITS } from "@/lib/dev-assistant-config";
 import { answerCitations, collectDocsSources } from "@/lib/dev-assistant-sources";
 import type { McpChatEvent } from "@/lib/mcp-chat-types";
@@ -25,36 +27,43 @@ const EXAMPLES = [
 ];
 
 type Branch = ProjectToolOutput<"git_branch">;
-type Exchange = { id: number; command: string; traces: McpToolTrace[]; answer: string; status: "running" | "done" | "error" | "stopped"; error?: string; seconds?: number };
+type Exchange = { id: number; command: string; traces: McpToolTrace[]; answer: string; status: "running" | "done" | "error" | "stopped"; error?: string; seconds?: number;
+  progress?: string; review?: { repository: string; report: CodeReviewReport } };
 export type DocsIndexSummary = { files: number; chunks: number; hitRate: number; createdAt: string; stale: boolean } | null;
+type ReviewOptions = {
+  baseRef: string; headRef: string; disabled: boolean;
+  onEvent: (event: CodeReviewEvent) => void;
+  onStateChange: (status: Exchange["status"], cancel?: () => void) => void;
+};
 
 function branchLabel(branch: Branch): string {
   return `${branch.branch ?? "detached HEAD"}${branch.head ? ` · ${branch.head.slice(0, 7)}` : ""}`;
 }
 
-function ExchangeView({ exchange }: { exchange: Exchange }) {
+function ExchangeView({ exchange, reviewMode = false }: { exchange: Exchange; reviewMode?: boolean }) {
   const { sources, stale } = collectDocsSources(exchange.traces);
   const { cited, unknown } = answerCitations(exchange.answer, sources);
   return (
     <li className="min-w-0 space-y-3">
       <p className="ml-auto w-fit max-w-full rounded-2xl rounded-br-md border border-accent/30 bg-accent/10 px-3 py-2 font-mono text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{exchange.command}</p>
       {exchange.traces.length > 0 && (
-        <div className="space-y-2" aria-label="Вызовы MCP-инструментов">
-          {exchange.traces.map((trace) => <McpToolCard key={trace.callId} trace={trace} defaultOpen={false} />)}
+        <div className="space-y-2" aria-label={reviewMode ? "Вызовы инструментов" : "Вызовы MCP-инструментов"}>
+          {exchange.traces.map((trace) => <McpToolCard key={trace.callId} trace={trace} defaultOpen={false} kind={reviewMode ? "local" : "mcp"} />)}
         </div>
       )}
       <article className="min-w-0 rounded-2xl rounded-bl-md border border-line bg-background p-4">
-        {exchange.status === "running" && !exchange.answer && <p className="text-sm text-muted" role="status">Ассистент вызывает инструменты проекта и готовит ответ…</p>}
+        {exchange.status === "running" && !exchange.answer && <p className="text-sm text-muted" role="status">{exchange.progress ?? "Ассистент выбирает инструменты и готовит ответ…"}</p>}
         {exchange.answer && (
           <div className="prose prose-sm prose-invert max-w-none min-w-0 break-words [overflow-wrap:anywhere] [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:overflow-x-auto">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{exchange.answer}</ReactMarkdown>
           </div>
         )}
         {exchange.status === "error" && <p role="alert" className="text-sm text-red-300">{exchange.error}</p>}
-        {exchange.status === "stopped" && <p className="text-sm text-muted">Запрос остановлен; неполный ответ не показан.</p>}
-        {exchange.seconds !== undefined && <p className="mt-3 text-xs text-muted">Вызовов MCP: {exchange.traces.length} · {exchange.seconds.toFixed(1)} с</p>}
+        {exchange.status === "stopped" && <p className="text-sm text-muted">{exchange.review ? "Ответ агента остановлен. Готовый отчёт остаётся на странице." : "Запрос остановлен; неполный ответ не показан."}</p>}
+        {exchange.review && <div className="mt-4"><ReviewReport report={exchange.review.report} repository={exchange.review.repository} /></div>}
+        {exchange.seconds !== undefined && <p className="mt-3 text-xs text-muted">Вызовов инструментов: {exchange.traces.length} · {exchange.seconds.toFixed(1)} с</p>}
         {stale && <p className="mt-3 text-xs text-amber-300">Документация изменилась после индексации: выполните <code>npm run dev-assistant:index</code>.</p>}
-        {unknown.length > 0 && <p className="mt-3 text-xs text-amber-300">Ссылки без найденного фрагмента: {unknown.map((id) => `[${id}]`).join(", ")}.</p>}
+        {!reviewMode && unknown.length > 0 && <p className="mt-3 text-xs text-amber-300">Ссылки без найденного фрагмента: {unknown.map((id) => `[${id}]`).join(", ")}.</p>}
         {exchange.status === "done" && sources.length > 0 && (
           <section className="mt-4 border-t border-line pt-3" aria-label="Источники из документации">
             <h3 className="text-sm font-medium">Источники</h3>
@@ -77,8 +86,9 @@ function ExchangeView({ exchange }: { exchange: Exchange }) {
   );
 }
 
-export function DevAssistantWorkspace({ model, index }: { model: string | null; index: DocsIndexSummary }) {
-  const [input, setInput] = useState("/help ");
+export function DevAssistantWorkspace({ model, index, review }: { model: string | null; index: DocsIndexSummary; review?: ReviewOptions }) {
+  const reviewMode = review !== undefined;
+  const [input, setInput] = useState(review ? "" : "/help ");
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [branch, setBranch] = useState<Branch | null>(null);
   const [branchError, setBranchError] = useState<string | null>(null);
@@ -89,6 +99,7 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
   const running = exchanges.some((exchange) => exchange.status === "running");
 
   useEffect(() => {
+    if (reviewMode) return;
     const controller = new AbortController();
     fetch("/api/dev-assistant/branch", { signal: controller.signal })
       .then(async (response) => {
@@ -100,7 +111,7 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
       })
       .catch((cause: unknown) => { if (!controller.signal.aborted) setBranchError(cause instanceof Error ? cause.message : "Ветка недоступна."); });
     return () => controller.abort();
-  }, []);
+  }, [reviewMode]);
   useEffect(() => () => abortRef.current?.abort(), []);
 
   function update(id: number, change: (exchange: Exchange) => Exchange) {
@@ -119,13 +130,18 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
       update(id, (exchange) => ({ ...exchange, traces: exchange.traces.map((item) => item.callId === event.callId ? { ...item, result: event.result } : item) }));
     } else if (event.type === "text") {
       update(id, (exchange) => ({ ...exchange, answer: exchange.answer + event.delta }));
+    } else if (event.type === "review" && review) {
+      review.onEvent(event.event);
+      const item = event.event;
+      if (item.type === "progress") update(id, exchange => ({ ...exchange, progress: item.message }));
+      if (item.type === "result") update(id, exchange => ({ ...exchange, review: { repository: event.repository, report: item.report } }));
     }
   }
 
   async function send(raw: string) {
     const command = raw.trim();
-    if (running || !command) return;
-    if (!HELP_COMMAND.test(command)) {
+    if (running || review?.disabled || !command) return;
+    if (!review && !HELP_COMMAND.test(command)) {
       setHint("Поддерживается команда /help <вопрос о проекте>.");
       return;
     }
@@ -135,10 +151,13 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
     const controller = new AbortController();
     abortRef.current = controller;
     setExchanges((current) => [...current, { id, command, traces: [], answer: "", status: "running" }]);
-    setInput("/help ");
+    setInput(review ? "" : "/help ");
+    review?.onStateChange("running", () => controller.abort());
+    let outcome: Exchange["status"] = "error";
     try {
-      const response = await fetch("/api/dev-assistant/help", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command }), signal: controller.signal,
+      const response = await fetch(review ? "/api/code-review/agent" : "/api/dev-assistant/help", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(review ? { message: command, baseRef: review.baseRef, headRef: review.headRef } : { command }), signal: controller.signal,
       });
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => null);
@@ -147,11 +166,14 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
       const toolNames = new Map<string, string>();
       await consumeMcpChatStream(response.body, (event) => apply(id, event, toolNames));
       update(id, (exchange) => ({ ...exchange, status: "done", seconds: (performance.now() - started) / 1000 }));
+      outcome = "done";
     } catch (cause) {
+      outcome = controller.signal.aborted ? "stopped" : "error";
       if (controller.signal.aborted) update(id, (exchange) => ({ ...exchange, answer: "", status: "stopped" }));
       else update(id, (exchange) => ({ ...exchange, answer: "", status: "error", error: cause instanceof Error ? cause.message : "Не удалось получить ответ." }));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
+      review?.onStateChange(outcome);
       textareaRef.current?.focus();
     }
   }
@@ -164,20 +186,20 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
   }
 
   return (
-    <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
+    <div className={review ? "min-w-0 space-y-4" : "grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]"}>
       <section className={`${CARD} flex min-h-[60vh] flex-col`} aria-labelledby="assistant-heading">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="assistant-heading" className="flex items-center gap-2 text-lg font-semibold"><TerminalWindowIcon size={20} className="text-accent" aria-hidden />Команда /help</h2>
-          <p className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border border-line px-3 text-xs text-muted" role="status" aria-label="Текущая git-ветка по MCP">
+          <h2 id="assistant-heading" className="flex items-center gap-2 text-lg font-semibold"><TerminalWindowIcon size={20} className="text-accent" aria-hidden />{review ? "Flash Dev · ревью кода" : "Команда /help"}</h2>
+          {!review && <p className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border border-line px-3 text-xs text-muted" role="status" aria-label="Текущая git-ветка по MCP">
             <GitBranchIcon size={14} className="shrink-0 text-accent" aria-hidden />
             <span className="truncate font-mono">{branch ? branchLabel(branch) : branchError ?? "ветка загружается…"}</span>
-          </p>
+          </p>}
         </div>
-        <p className="mt-2 text-sm leading-relaxed text-muted">Каждая команда независима: модель {model ?? "не настроена"} сама выбирает инструменты MCP-сервера проекта и отвечает со ссылками на документацию.</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted">{review ? "Попросите проверить PR по номеру или сравнить ветки. Агент получит diff, документацию и связанный код и покажет отчёт здесь. Каждый запрос независим." : `Каждая команда независима: модель ${model ?? "не настроена"} сама выбирает инструменты MCP-сервера проекта и отвечает со ссылками на документацию.`}</p>
 
         <ol className="mt-4 flex-1 space-y-5" aria-live="polite">
-          {exchanges.length === 0 && <li className="rounded-xl border border-dashed border-line p-4 text-sm leading-relaxed text-muted">Начните с <code>/help</code> — ассистент покажет свои возможности и текущую ветку — или выберите пример справа.</li>}
-          {exchanges.map((exchange) => <ExchangeView key={exchange.id} exchange={exchange} />)}
+          {exchanges.length === 0 && <li className="rounded-xl border border-dashed border-line p-4 text-sm leading-relaxed text-muted">{review ? "Например: «Проверь выбранные ветки» или «Проверь PR #42». Прогресс, замечания и источники появятся в этом чате." : <>Начните с <code>/help</code> — ассистент покажет свои возможности и текущую ветку — или выберите пример справа.</>}</li>}
+          {exchanges.map((exchange) => <ExchangeView key={exchange.id} exchange={exchange} reviewMode={!!review} />)}
         </ol>
 
         <form onSubmit={(event) => { event.preventDefault(); void send(input); }} className="mt-5 border-t border-line pt-4">
@@ -187,11 +209,13 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
               value={input}
               onChange={(event) => { setInput(event.target.value); setHint(null); }}
               onKeyDown={onKeyDown}
-              maxLength={DEV_ASSISTANT_LIMITS.maxQuestionCharacters + 6}
+              maxLength={DEV_ASSISTANT_LIMITS.maxQuestionCharacters + (reviewMode ? 0 : 6)}
               enterKeyHint="send"
               rows={2}
               aria-label="Команда ассистенту"
               aria-describedby="assistant-input-hint"
+              placeholder={review ? "Проверь PR #42 или ветку относительно main…" : "/help <вопрос о проекте>"}
+              disabled={review?.disabled}
               className="min-h-11 flex-1 resize-y rounded-xl border border-line bg-background px-3 py-2.5 font-mono text-sm leading-relaxed placeholder:text-muted/70 focus:border-accent/50 focus:outline-none"
             />
             {running ? (
@@ -199,7 +223,7 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
                 <StopIcon size={18} weight="fill" aria-hidden />
               </button>
             ) : (
-              <button type="submit" disabled={!input.trim()} aria-label="Отправить команду" className={`flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-accent-deep text-white transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}>
+              <button type="submit" disabled={!input.trim() || review?.disabled} aria-label="Отправить команду" className={`flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-accent-deep text-white transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}>
                 <PaperPlaneRightIcon size={18} weight="fill" aria-hidden />
               </button>
             )}
@@ -208,7 +232,9 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
         </form>
       </section>
 
-      <aside className="space-y-5" aria-label="Контекст ассистента">
+      {review ? <div className="flex flex-wrap gap-2" aria-label="Примеры запросов ревью">
+        {["Проверь выбранные ветки", "Проверь текущую ветку относительно main"].map(example => <button key={example} type="button" disabled={running || review.disabled} onClick={() => void send(example)} className={CHIP}>{example}</button>)}
+      </div> : <aside className="space-y-5" aria-label="Контекст ассистента">
         <section className={CARD} aria-labelledby="examples-heading">
           <h2 id="examples-heading" className="font-semibold">Примеры команд</h2>
           <div className="mt-3 grid gap-2">
@@ -231,7 +257,7 @@ export function DevAssistantWorkspace({ model, index }: { model: string | null; 
           {index?.stale && <p className="mt-2 text-xs text-amber-300">Документация изменилась после индексации — пересоздайте индекс.</p>}
           <p className="mt-3 text-xs leading-relaxed text-muted">MCP-сервер работает через stdio только на чтение. Фрагменты документации, список файлов и diff уходят провайдеру модели.</p>
         </section>
-      </aside>
+      </aside>}
     </div>
   );
 }
