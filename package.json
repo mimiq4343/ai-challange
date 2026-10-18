@@ -20,6 +20,8 @@
     "test:rag": "node --conditions=react-server --import tsx --test tests/rag-*.test.ts",
     "dev-assistant:index": "node --conditions=react-server --import tsx scripts/index-dev-assistant.ts",
     "test:dev-assistant": "node --conditions=react-server --import tsx --test tests/project-*.test.ts tests/dev-assistant-*.test.ts",
+    "review:pr": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/review-pr.ts",
+    "test:code-review": "node --conditions=react-server --import tsx --test tests/code-review-*.test.ts",
     "mcp:server": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/mcp-server.ts",
     "mcp:list": "node --conditions=react-server --import tsx scripts/mcp-list.ts",
     "test:mcp": "node --conditions=react-server --import tsx --test tests/mcp-network.test.ts tests/mcp-server.test.ts tests/mcp-store.test.ts tests/mcp-api.test.ts tests/mcp-auth.test.ts tests/github-repository-tool.test.ts tests/mcp-client-call.test.ts tests/mcp-tool-chat-agent.test.ts tests/mcp-chat-stream.test.ts",

@@ -54,6 +54,14 @@ Real `/help` answers, called tools and limitations are in
 [`reports/day-31/help-quality.md`](reports/day-31/help-quality.md); full answers
 are [`help-answers.md`](reports/day-31/help-answers.md).
 
+Day 32 decisions are recorded in [`memory/day-32.md`](memory/day-32.md).
+The user approved the trusted-base GitHub Action, documentation/code RAG and
+updated PR comment in chat; design and implementation planning stayed there.
+The real seeded SQL regression, retrieved context and verification limits are
+recorded in [`reports/day-32/review-quality.md`](reports/day-32/review-quality.md).
+After the user's correction, Day 32 also includes an application page with
+branch selection, streamed progress, diff, findings and RAG sources.
+
 ## Superpowers designs
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:
