@@ -35,7 +35,7 @@ them against the current sources before relying on them.
 - [day-24.md](day-24.md) — mandatory source metadata and verbatim quotes, deterministic weak-context refusal, ten-question grounding evaluation and semantic limitations.
 - [day-25.md](day-25.md) — conversational RAG, persisted task memory with user provenance, atomic source snapshots and stale-history protection.
 - [day-31.md](day-31.md) — developer assistant: `/help` tool-loop over a stdio project MCP server, docs RAG index, browser script and environment findings.
-- [day-32.md](day-32.md) — automated PR review: trusted-base GitHub Action, docs/code RAG, validated findings, comment updates and provider configuration.
+- [day-32.md](day-32.md) — automated PR review: application page, trusted-base GitHub Action, docs/code RAG, validated findings and provider configuration.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

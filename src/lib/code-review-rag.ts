@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { CODE_REVIEW_CONFIG as LIMITS, CODE_REVIEW_INDEX_CONFIG as CONFIG } from "./code-review-config";
 import { loadReviewCorpus } from "./code-review-git";
 import type { ReviewFile, ReviewSource } from "./code-review-types";
@@ -22,6 +23,9 @@ export async function buildReviewIndex(options: {
   const chunks: DocumentChunk[] = [];
   for (const [i, document] of documents.entries()) {
     chunks.push(...await chunkDocuments([document], "structural", async (text) => {
+      // Синхронный токенизатор в цепочке Promise иначе блокирует отправку
+      // прогресса по HTTP и получение отмены вплоть до конца всего корпуса.
+      await yieldToEventLoop();
       signal?.throwIfAborted();
       return client.countTokens(text);
     }, CONFIG));

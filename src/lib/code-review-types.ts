@@ -48,3 +48,17 @@ export type CodeReviewReport = {
   snapshot: ReviewSnapshot;
   reviews: FileReview[];
 };
+
+export type ReviewBranch = { ref: string; label: string; sha: string };
+export type ReviewWorkspace = {
+  repository: string;
+  branches: ReviewBranch[];
+  baseRef: string;
+  headRef: string;
+};
+
+export type CodeReviewEvent =
+  | { type: "progress"; message: string }
+  | { type: "snapshot"; snapshot: ReviewSnapshot }
+  | { type: "result"; report: CodeReviewReport }
+  | { type: "error"; message: string };

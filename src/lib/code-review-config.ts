@@ -27,6 +27,13 @@ export const CODE_REVIEW_CONFIG = {
   commentFooterReserveCharacters: 2_000,
 } as const;
 
+export const CODE_REVIEW_WEB_CONFIG = {
+  maxRequestBytes: 4_096,
+  maxBranches: 200,
+  maxEventCharacters: 3_000_000,
+  runTimeoutMs: 45 * 60_000,
+} as const;
+
 export const CODE_REVIEW_INDEX_CONFIG = {
   ...RAG_EMBEDDING_CONFIG,
   databasePath: "data/code-review.sqlite",

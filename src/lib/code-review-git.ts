@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
-import { CODE_REVIEW_CONFIG as CONFIG } from "./code-review-config";
-import type { ReviewFile, ReviewSnapshot } from "./code-review-types";
+import { CODE_REVIEW_CONFIG as CONFIG, CODE_REVIEW_WEB_CONFIG } from "./code-review-config";
+import type { ReviewFile, ReviewSnapshot, ReviewWorkspace } from "./code-review-types";
 import type { CorpusDocument } from "./document-types";
 
 const execFileAsync = promisify(execFile);
@@ -34,6 +34,29 @@ async function git(root: string, args: string[], signal?: AbortSignal): Promise<
     env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
   });
   return stdout;
+}
+
+/** Веб-интерфейс выбирает только известные Git refs, затем фиксирует их SHA. */
+export async function readReviewWorkspace(root: string, signal?: AbortSignal): Promise<ReviewWorkspace> {
+  const [remote, refs, head] = await Promise.all([
+    git(root, ["config", "--get", "remote.origin.url"], signal),
+    git(root, ["for-each-ref", `--count=${CODE_REVIEW_WEB_CONFIG.maxBranches}`, "--format=%(refname)%00%(objectname)%00%(symref)", "refs/heads", "refs/remotes"], signal),
+    git(root, ["rev-parse", "--verify", "HEAD^{commit}"], signal),
+  ]);
+  const match = /^(?:git@github\.com:|https:\/\/github\.com\/)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(remote.toString("utf8").trim().replace(/\.git$/, ""));
+  if (!match) throw new Error("Origin должен указывать на репозиторий GitHub.");
+  const branches = refs.toString("utf8").trim().split("\n").filter(Boolean).flatMap((entry) => {
+    const [ref, sha, symbolic] = entry.split("\0");
+    if (symbolic) return [];
+    assertSha(sha);
+    return [{ ref, label: ref.replace(/^refs\/(?:heads|remotes)\//, ""), sha }];
+  });
+  const sha = head.toString("utf8").trim();
+  assertSha(sha);
+  branches.unshift({ ref: "HEAD", label: "HEAD · текущий коммит", sha });
+  return { repository: match[1], branches, headRef: "HEAD",
+    baseRef: branches.find((branch) => branch.ref === "refs/heads/main")?.ref
+      ?? branches.find((branch) => branch.ref === "refs/remotes/origin/main")?.ref ?? "HEAD" };
 }
 
 type TreeFile = { path: string; mode: string; size: number };

@@ -59,6 +59,8 @@ The user approved the trusted-base GitHub Action, documentation/code RAG and
 updated PR comment in chat; design and implementation planning stayed there.
 The real seeded SQL regression, retrieved context and verification limits are
 recorded in [`reports/day-32/review-quality.md`](reports/day-32/review-quality.md).
+After the user's correction, Day 32 also includes an application page with
+branch selection, streamed progress, diff, findings and RAG sources.
 
 ## Superpowers designs
 

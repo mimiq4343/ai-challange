@@ -2,6 +2,25 @@
 
 Snapshot: 2026-10-18.
 
+- User correction: Day 32 must be testable in the application's `/day-32`
+  page, as previous challenge days are. A CLI and GitHub Action alone did not
+  satisfy their expected workflow. The approved web screen selects base/head
+  branches, starts the existing analyzer, streams progress and shows the diff,
+  bugs, architecture findings, recommendations and retrieved sources.
+- The web API resolves server-known refs to immutable SHAs without checkout,
+  uses a separate temporary index per request and does not publish to GitHub.
+  Reports live in page state; refresh clears them. Cancellation propagates to
+  Git/LLM, and a stream without a terminal result is an error. Failed files stay
+  unreviewed and the UI marks their report as partial. See the
+  [web guide](../../docs/code-review.md#проверка-в-приложении).
+- Web verification found two integration failures: concurrent downloads in one
+  process collided on the PID-based temporary file, and immediately resolved
+  tokenization promises starved Node's event loop. Unique download paths and
+  an explicit event-loop yield before tokenization fixed them, with red/green
+  regressions. The final small-corpus browser run found the seeded array-index
+  regression in 4.8 seconds; cancellation during full-corpus chunking kept the
+  branch API responsive. Measurements are in the
+  [quality report](../reports/day-32/review-quality.md#проверка-страницы-day-32).
 - The user approved the in-chat design and implementation on `day-32` from
   `main`: a GitHub Action over PR diffs, RAG over project documentation and
   source code, a Russian review comment with bugs, architecture concerns and

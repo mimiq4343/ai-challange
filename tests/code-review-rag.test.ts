@@ -47,3 +47,27 @@ test("review retrieval loads a persisted base-SHA index and includes both docs a
   await assert.rejects(buildReviewIndex({ root, baseSha, indexRoot, client, signal: aborted.signal }), /cancel indexing/);
   assert.equal(readReviewIndex(join(indexRoot, CONFIG.databasePath), baseSha).id, index.id);
 });
+
+test("cancellation during CPU tokenization is observed before embeddings and index publication", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "flash-review-yield-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = (...args: string[]) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
+  git("init", "-q"); git("config", "user.email", "test@example.com"); git("config", "user.name", "Test");
+  await mkdir(join(root, "src"));
+  await writeFile(join(root, "README.md"), `# Project\n${"long documentation paragraph ".repeat(2_000)}\n`);
+  await writeFile(join(root, "src/store.ts"), "export const value = 1;\n");
+  git("add", "."); git("commit", "-qm", "base");
+  const controller = new AbortController();
+  let scheduled = false;
+  const client = {
+    async countTokens(text: string) {
+      if (!scheduled) { scheduled = true; setImmediate(() => controller.abort(new Error("cancel-during-tokenization"))); }
+      return Math.ceil(text.length / 4);
+    },
+    async embed(texts: readonly string[]) {
+      return { vectors: texts.map(() => [1, ...Array<number>(383).fill(0)]), tokens: 1 };
+    },
+  };
+  await assert.rejects(buildReviewIndex({ root, baseSha: git("rev-parse", "HEAD"), indexRoot: root, client, signal: controller.signal }), /cancel-during-tokenization/);
+  assert.throws(() => readReviewIndex(join(root, CONFIG.databasePath), git("rev-parse", "HEAD")));
+});
