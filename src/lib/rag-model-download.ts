@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, rename, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -26,7 +26,7 @@ export async function prepareRagModel(root: string, signal?: AbortSignal, onProg
     if (existing === file.sha256) continue;
     if (existing !== null) throw new Error(`Контрольная сумма ${target} не совпадает. Удалите повреждённый файл перед повторной загрузкой.`);
     await mkdir(dirname(target), { recursive: true });
-    const temporary = `${target}.${process.pid}.tmp`;
+    const temporary = `${target}.${randomUUID()}.tmp`;
     const requestSignal = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(RAG_EMBEDDING_CONFIG.downloadTimeoutMs)]);
     onProgress?.(`Загрузка ${RAG_EMBEDDING_CONFIG.model}/${file.path}…`);
     try {

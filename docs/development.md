@@ -33,6 +33,7 @@ npm run dev
 | `npm run documents:index` | индекс Day 21 (OpenRouter Nemotron) |
 | `npm run rag:index` | локальный E5-индекс Недели 6; первый запуск скачивает модель |
 | `npm run dev-assistant:index` | индекс документации проекта Day 31 |
+| `npm run review:pr -- --base <SHA> --head <SHA> --repository owner/repo` | локальное AI-ревью изменений Day 32 |
 | `npm run rag:benchmark`, `rag:refinement-benchmark`, `rag:grounding-benchmark`, `rag:chat-benchmark` | бенчмарки Day 22–25 |
 | `npm run mcp:server`, `npm run mcp:list` | HTTP MCP-сервер и вывод его инструментов |
 | `npm run scheduler:worker`, `npm run scheduler:install` | фоновый worker Day 18 и установка systemd-юнитов |
@@ -48,6 +49,7 @@ npm run dev
 | `npm run test:mcp`, `test:scheduler`, `test:pipeline`, `test:orchestration` | Day 16–20 |
 | `npm run test:documents`, `test:rag` | Day 21–25 |
 | `npm run test:dev-assistant` | Day 31: MCP-сервер проекта, git, команда `/help` |
+| `npm run test:code-review` | Day 32: снимок PR, RAG, ответы LLM, CLI и комментарий GitHub |
 
 ## Проверки перед сдачей
 
