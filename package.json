@@ -19,6 +19,8 @@
     "rag:chat-benchmark": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/rag-chat-benchmark.ts",
     "test:rag": "node --conditions=react-server --import tsx --test tests/rag-*.test.ts",
     "dev-assistant:index": "node --conditions=react-server --import tsx scripts/index-dev-assistant.ts",
+    "support:index": "node --conditions=react-server --import tsx scripts/index-support.ts",
+    "test:support": "node --conditions=react-server --import tsx --test tests/support*.test.ts",
     "test:dev-assistant": "node --conditions=react-server --import tsx --test tests/project-*.test.ts tests/dev-assistant-*.test.ts",
     "review:pr": "node --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/review-pr.ts",
     "test:code-review": "node --conditions=react-server --import tsx --test tests/code-review-*.test.ts",
