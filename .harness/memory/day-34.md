@@ -29,3 +29,16 @@ Snapshot: 2026-10-18.
 - Independent review found that rewriting diff headers also changed hunk
   lines beginning with `--- ` or `+++ `. A failing real-Git test reproduced
   it; header rewriting now stops at the first hunk, preserving preview content.
+- A user screenshot showed raw DSML after 23 tool calls instead of an ADR.
+  Deterministic regressions confirmed that the provider boundary accepted raw
+  tool markup as a successful answer and that exploration could consume the
+  entire budget. The reader now rejects unquoted DSML; final rounds retain
+  the catalog with explicit `tool_choice: none`, and file mode reserves target reads and
+  proposal calls. Read-only requests still require no file. The exact UI ADR
+  example subsequently produced a real five-call proposal with all four ADR
+  sections. The initial live rerun also succeeded, so the original provider
+  leak is intermittent; its acceptance is reproduced deterministically.
+- Review caught a false positive for quoted DSML in code explanations. The
+  existing Markdown parser now distinguishes code/quotes from native markup;
+  positive inline/fenced/blockquote cases and mixed quoted/raw rejection are
+  covered without executing textual calls.

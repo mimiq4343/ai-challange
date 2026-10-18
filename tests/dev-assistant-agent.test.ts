@@ -23,7 +23,7 @@ before(() => {
 after(() => rmSync(root, { recursive: true, force: true }));
 
 const usage = { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 };
-type ProviderRequest = { messages: { role: string; content?: string; tool_call_id?: string }[]; tools?: { function: { name: string } }[] };
+type ProviderRequest = { messages: { role: string; content?: string; tool_call_id?: string }[]; tools?: { function: { name: string } }[]; tool_choice?: string };
 
 function sse(events: unknown[]): Response {
   return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n");
@@ -73,13 +73,15 @@ test("the model selects project tools over stdio and recovers from rejected argu
   assert.ok(requests[2].messages.some((message) => message.role === "tool" && message.tool_call_id === "c3"));
 });
 
-test("after the tool budget the model must summarize without tools", async () => {
+test("after the tool budget the model explicitly disables calls and retains the tool catalog", async () => {
   const events: McpToolEvent[] = [];
-  const requests = provider((request, round) => request.tools ? calls([`c${round}`, "git_status", "{}"]) : answer("Итог по git_status."));
+  const requests = provider((request, round) => request.tool_choice === "none" ? answer("Итог по git_status.") : calls([`c${round}`, "git_status", "{}"]));
   const response = await agent(events).respond(question, AbortSignal.timeout(60_000), { systemMessages: ["Тест"] });
   assert.equal(await new Response(response.stream).text(), "Итог по git_status.");
   assert.equal(requests.length, DEV_ASSISTANT_LIMITS.maxRounds);
-  assert.equal(requests.at(-1)!.tools, undefined);
+  assert.equal(requests.at(-1)!.tool_choice, "none");
+  assert.deepEqual(requests.at(-1)!.tools, requests[0].tools);
+  assert.match(requests.at(-1)!.messages.at(-1)!.content!, /бюджет.*исчерпан/i);
   assert.equal(events.filter((event) => event.type === "tool-result").length, DEV_ASSISTANT_LIMITS.maxRounds - 1);
 });
 

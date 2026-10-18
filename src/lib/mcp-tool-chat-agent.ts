@@ -225,14 +225,26 @@ export class McpToolChatAgent {
 
         for (let roundIndex = 0; roundIndex < limits.maxRounds; roundIndex += 1) {
           signal.throwIfAborted();
-          // Последний раунд оркестрации идёт без инструментов: модель подводит итог выполненного флоу.
+          // Финальный раунд сохраняет каталог, но запрещает вызовы: модель подводит итог.
           const finalRound = recoverable && (roundIndex === limits.maxRounds - 1 || totalCalls >= limits.maxToolCalls);
+          const preparationRound = files && !finalRound && (
+            roundIndex >= limits.maxRounds - FILE_ASSISTANT_CONFIG.preparationReserveRounds - 1 ||
+            totalCalls >= limits.maxToolCalls - FILE_ASSISTANT_CONFIG.preparationReserveCalls
+          );
+          const proposalRound = preparationRound && (roundIndex >= limits.maxRounds - 2 || totalCalls >= limits.maxToolCalls - limits.maxToolsPerRound);
+          const roundTools = preparationRound ? tools.filter(tool => tool.function.name === "propose_file" || (!proposalRound && tool.function.name === "read_file"))
+            : pipeline ? tools.filter(tool => tool.function.name === pipelineStages[pipelineStep]) : tools;
+          const budgetHint = finalRound
+            ? "Бюджет инструментов исчерпан. Сейчас tool_choice=none: дай итог только по подтверждённым результатам. Не выводи вызовы инструментов текстом. Если запрошенный файл не подготовлен, прямо скажи, что задача не завершена."
+            : preparationRound
+              ? `Исследование завершено: осталось ${limits.maxToolCalls - totalCalls} вызовов и ${limits.maxRounds - roundIndex - 1} рабочих раундов. Если пользователь просил файл, ${proposalRound ? "сейчас вызови propose_file" : "при необходимости прочитай целевой документ и затем вызови propose_file"} по уже полученным данным. Не расширяй поиск. Если запроса на создание или изменение файла не было, подведи итог без предложения файла.`
+              : null;
           const requestBody = JSON.stringify({
             model: this.model,
-            messages: history,
+            messages: budgetHint ? [...history, { role: "system", content: budgetHint }] : history,
             ...(pipeline || review ? PIPELINE_MODEL_SETTINGS : {}),
-            ...(finalRound || (pipeline && pipelineStep >= pipelineStages.length) ? {} : {
-              tools: pipeline ? tools.filter((tool) => tool.function.name === pipelineStages[pipelineStep]) : tools,
+            ...(finalRound ? { tools, tool_choice: "none" } : pipeline && pipelineStep >= pipelineStages.length ? {} : {
+              tools: roundTools,
               tool_choice: pipeline && pipelineStep > 0 ? "required" : "auto",
             }),
             stream: true,
@@ -313,6 +325,9 @@ export class McpToolChatAgent {
               const issues = parsed.error.issues.map((issue) => `${issue.path.join(".") || "аргументы"}: ${issue.message}`).join("; ");
               const shown = args !== null && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : {};
               return { call, args: shown, rejection: `Аргументы не прошли проверку и не отправлены на сервер: ${issues}` };
+            }
+            if (preparationRound && !roundTools.some(tool => tool.function.name === name)) {
+              return { call, args: parsed.data, rejection: "Этот инструмент недоступен в этом раунде: бюджет сохранён для подготовки файла. Используй разрешённый каталог или подведи итог." };
             }
             if (pipeline && ((pipelineStep === 1 && parsed.data.searchResultId !== searchResultId) ||
                 (pipelineStep === 2 && parsed.data.summaryId !== summaryId))) {
