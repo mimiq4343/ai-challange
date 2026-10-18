@@ -8,6 +8,9 @@ Snapshot: 2026-10-18.
   remaining verification steps are GitHub buttons. The test branch starts
   from the current `main`, independently of the installation branch, to keep
   its diff limited to one seeded regression after either merge or squash.
+  The prepared PRs are [installation #1](https://github.com/mimiq4343/ai-challange/pull/1)
+  and [draft pipeline test #2](https://github.com/mimiq4343/ai-challange/pull/2).
+  Production build, 22 review tests and scoped ESLint passed before handoff.
 - User correction: Day 32 must be testable in the application's `/day-32`
   page, as previous challenge days are. A CLI and GitHub Action alone did not
   satisfy their expected workflow. The approved web screen selects base/head
@@ -76,7 +79,8 @@ Snapshot: 2026-10-18.
   publishes its comment. Reports live in ignored `data/code-review/`; failures
   replace `review.json` with an explicit failed result instead of leaving an
   older success. The workflow also writes Actions Summary and a seven-day
-  artifact. It becomes operational after the workflow reaches the PR base;
+  artifact. It becomes operational after the workflow reaches the repository's
+  default branch (`main`);
   the PR introducing the workflow cannot review itself with that workflow.
 - Real verification indexed 274 files / 3825 structural chunks and sent three
   documentation plus five code fragments to `deepseek-v4-flash`. A deliberately
