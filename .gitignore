@@ -87,3 +87,8 @@ data/dev-assistant-index.lock
 
 # Локальные отчёты AI-ревью Day 32
 data/code-review/
+
+# Локальная база знаний поддержки Day 33
+data/support-index.json
+data/support-index.json.*.tmp
+data/support-index.lock

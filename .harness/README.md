@@ -64,6 +64,13 @@ branch selection, streamed progress, diff, findings and RAG sources. The subsequ
 approved agent integration reuses Flash Dev for natural-language PR and branch
 reviews; the same report records its browser and contract checks.
 
+Day 33 decisions are recorded in [`memory/day-33.md`](memory/day-33.md).
+The user approved Flash Support with synthetic JSON tickets, read-only stdio MCP,
+FAQ RAG and persisted ticket conversations in chat. The product guide is
+[`../docs/support.md`](../docs/support.md).
+Real support answers, browser checks and verification limits are recorded in
+[`reports/day-33/quality.md`](reports/day-33/quality.md).
+
 ## Superpowers designs
 
 [`superpowers/specs/`](superpowers/specs) — approved designs, one per challenge day:
