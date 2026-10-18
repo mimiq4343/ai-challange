@@ -40,3 +40,9 @@ Snapshot: 2026-10-18.
   regression reproduced the escaping `ZodError`. The pipeline now checks both
   proposal character/byte limits and returns the completed downloadable report
   with an explicit `proposalError`, without creating a proposal.
+- `day-35` was pushed with the implementation (`abc2349`) and a separate
+  README-only timeline commit (`1d35fa8`). Automatic approval review rejected
+  advancing/pushing `main` as an unapproved integration with possible deployment
+  impact. Both local and remote `main` remain at `03c420b`; no command from the
+  rejected batch executed. Ask for explicit approval before retrying the
+  README-only update. The feature itself is published on `day-35`.
