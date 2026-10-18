@@ -5,11 +5,11 @@ Snapshot: 2026-10-18.
 - End-to-end acceptance requires a real PR event, an Actions run and a bot
   review comment. Comparing branches on `/day-32` verifies only the analyzer.
   The user requested pre-created installation and draft test PRs so the
-  remaining verification steps are GitHub buttons. The test branch starts
-  from the current `main`, independently of the installation branch, to keep
+  remaining verification steps were GitHub buttons. The test branch started
+  from the then-current `main`, independently of the installation branch, to keep
   its diff limited to one seeded regression after either merge or squash.
-  The prepared PRs are [installation #1](https://github.com/mimiq4343/ai-challange/pull/1)
-  and [draft pipeline test #2](https://github.com/mimiq4343/ai-challange/pull/2).
+  The prepared PRs were [installation #1](https://github.com/mimiq4343/ai-challange/pull/1)
+  and [pipeline test #2](https://github.com/mimiq4343/ai-challange/pull/2).
   Production build, 22 review tests and scoped ESLint passed before handoff.
   The user merged installation #1 on 2026-10-18. The first Actions run for
   test #2 failed because the PR's stored `base.sha` still pointed at the
@@ -19,15 +19,18 @@ Snapshot: 2026-10-18.
   failed with the original npm error before the fix and starts the analyzer
   successfully after it.
   Updating the test branch from installed `main` then triggered a successful
-  [real Actions run](https://github.com/mimiq4343/ai-challange/actions/runs/39109220125):
+  real Actions run `39109220125`:
   288 corpus files, 4019 chunks, one reviewed file, one high-severity array-index
-  bug and a [bot comment](https://github.com/mimiq4343/ai-challange/pull/2#issuecomment-6247414129).
+  bug and a bot review comment.
   The downloaded artifact includes the actual diff/full file and three docs
   plus five code sources. The run took about 11 minutes. It used the previous
   workflow with the refreshed base; the permanent checkout fix is prepared in
-  [PR #3](https://github.com/mimiq4343/ai-challange/pull/3). Test #2 is Draft again
-  so the user can merge #3, then press Ready for review to trigger the fixed
-  workflow. Do not merge the seeded test PR.
+  [PR #3](https://github.com/mimiq4343/ai-challange/pull/3).
+  The user accepted the observed run and requested cleanup on 2026-10-18.
+  Test #2 was closed without merging; its local and remote branch, both test
+  runs (`39109220125`, `39108917433`), artifact and bot comment were removed.
+  Shared application data, model weights, automated regression tests and the
+  open checkout-fix PR #3 remain. No repeat test is pending.
 - User correction: Day 32 must be testable in the application's `/day-32`
   page, as previous challenge days are. A CLI and GitHub Action alone did not
   satisfy their expected workflow. The approved web screen selects base/head
