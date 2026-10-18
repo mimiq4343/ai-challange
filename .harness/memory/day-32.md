@@ -5,12 +5,33 @@ Snapshot: 2026-10-18.
 - End-to-end acceptance requires a real PR event, an Actions run and a bot
   review comment. Comparing branches on `/day-32` verifies only the analyzer.
   The user requested pre-created installation and draft test PRs so the
-  remaining verification steps are GitHub buttons. The test branch starts
-  from the current `main`, independently of the installation branch, to keep
+  remaining verification steps were GitHub buttons. The test branch started
+  from the then-current `main`, independently of the installation branch, to keep
   its diff limited to one seeded regression after either merge or squash.
-  The prepared PRs are [installation #1](https://github.com/mimiq4343/ai-challange/pull/1)
-  and [draft pipeline test #2](https://github.com/mimiq4343/ai-challange/pull/2).
+  The prepared PRs were [installation #1](https://github.com/mimiq4343/ai-challange/pull/1)
+  and [pipeline test #2](https://github.com/mimiq4343/ai-challange/pull/2).
   Production build, 22 review tests and scoped ESLint passed before handoff.
+  The user merged installation #1 on 2026-10-18. The first Actions run for
+  test #2 failed because the PR's stored `base.sha` still pointed at the
+  pre-installation commit, so checkout had no `review:pr` script. The workflow
+  now executes the trusted reviewer from `github.workflow_sha`; PR base/head
+  SHAs still select the diff and RAG corpus. A real-Git checkout reproduction
+  failed with the original npm error before the fix and starts the analyzer
+  successfully after it.
+  Updating the test branch from installed `main` then triggered a successful
+  real Actions run `39109220125`:
+  288 corpus files, 4019 chunks, one reviewed file, one high-severity array-index
+  bug and a bot review comment.
+  The downloaded artifact includes the actual diff/full file and three docs
+  plus five code sources. The run took about 11 minutes. It used the previous
+  workflow with the refreshed base; the permanent checkout fix is in
+  [PR #3](https://github.com/mimiq4343/ai-challange/pull/3).
+  The user accepted the observed run and requested cleanup on 2026-10-18.
+  Test #2 was closed without merging; its local and remote branch, both test
+  runs (`39109220125`, `39108917433`), artifact and bot comment were removed.
+  Shared application data, model weights and automated regression tests remain.
+  After cleanup, the user explicitly authorized merging checkout-fix PR #3
+  into `main` on 2026-10-18. No repeat test is pending.
 - User correction: Day 32 must be testable in the application's `/day-32`
   page, as previous challenge days are. A CLI and GitHub Action alone did not
   satisfy their expected workflow. The approved web screen selects base/head
@@ -33,11 +54,12 @@ Snapshot: 2026-10-18.
 - The user approved the in-chat design and implementation on `day-32` from
   `main`: a GitHub Action over PR diffs, RAG over project documentation and
   source code, a Russian review comment with bugs, architecture concerns and
-  recommendations. No separate spec or plan files were requested. Integration
-  into `main` still requires an explicit request.
+  recommendations. No separate spec or plan files were requested. The user merged
+  the initial implementation via PR #1 and explicitly authorized integrating
+  the checkout fix via PR #3 on 2026-10-18.
 - [`ai-code-review.yml`](../../.github/workflows/ai-code-review.yml) uses
-  `pull_request_target`. Only the exact trusted `base.sha` and its dependencies
-  execute. The PR ref is fetched as Git objects and is never checked out,
+  `pull_request_target`. Only the exact trusted `github.workflow_sha` and its
+  dependencies execute. The PR ref is fetched as Git objects and is never checked out,
   imported, built or tested with secrets. Dependency caching is disabled;
   third-party Actions are pinned to immutable commits, Node.js to `24.22.0`.
 - [`code-review-git.ts`](../../src/lib/code-review-git.ts) computes a three-dot
@@ -93,4 +115,4 @@ Snapshot: 2026-10-18.
   demonstrated the issue and passed after filtering. The full LLM run was
   not repeated after that retrieval change.
   See the [quality report](../reports/day-32/review-quality.md). Live Actions
-  publication remains unverified until integration into the PR base.
+  publication was subsequently verified with the array-index test above.

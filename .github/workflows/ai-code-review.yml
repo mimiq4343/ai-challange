@@ -18,12 +18,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      # Выполняется только доверенный код base SHA. Head PR читается через Git
+      # Ревьюер берётся из коммита workflow: base.sha старого PR может ещё
+      # не содержать review:pr. Head PR читается через Git
       # как данные, без checkout, импорта модулей, сборки и запуска его скриптов.
-      - name: Checkout trusted base
+      - name: Checkout trusted reviewer
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.workflow_sha }}
           fetch-depth: 0
           persist-credentials: false
 

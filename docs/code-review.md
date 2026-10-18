@@ -64,10 +64,12 @@ Workflow явно запрашивает `contents: read` и `pull-requests: wri
 
 ## Сбор контекста
 
-1. `actions/checkout` получает точный `base.sha` с полной историей и без
-   сохранения токена в Git-конфигурации.
+1. `actions/checkout` получает точный `github.workflow_sha` с полной историей
+   и без сохранения токена в Git-конфигурации. Это доверенный коммит самого
+   workflow из default branch. У PR, созданного до установки ревьюера,
+   `base.sha` может указывать на старый коммит без `review:pr`.
 2. `fetchReviewHead` скачивает `refs/pull/<number>/head` и проверяет SHA из
-   события. Рабочая копия остаётся на base. Токен передаётся Git через
+   события. Рабочая копия остаётся на коммите workflow. Токен передаётся Git через
    окружение, без аргументов командной строки.
 3. `collectReviewSnapshot` вычисляет merge base и сравнивает его с head.
    Список файлов включает добавления, удаления и переименования. Файлы
@@ -88,7 +90,8 @@ TypeScript/TSX, JavaScript/JSX, Markdown, JSON, YAML, CSS и `.gitignore`.
 
 Внешние diff/textconv отключены. PR не запускает свои install-скрипты,
 сборку, тесты или импорт модулей в процессе с секретами. Все исполняемые
-скрипты и зависимости берутся из доверенного base SHA.
+скрипты и зависимости берутся из доверенного коммита workflow.
+SHA для diff и RAG по-прежнему берутся из события PR.
 Это сохраняет доступ к LLM и возможность комментария для PR из форков.
 Основание: [GitHub о `pull_request_target`](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target).
 
