@@ -57,6 +57,7 @@ MCP-серверов, а также локальная индексация до
 | `day-32` | Day 32 «Автоматизация ревью кода» — `/day-32` и GitHub Action с RAG |
 | `day-33` | Day 33 «Ассистент поддержки» — `/day-33`, FAQ/RAG и тикеты через MCP; интегрирован в `main` |
 | `day-34` | Day 34 «Ассистент для работы с файлами» — `/day-34`, поиск, документация и применение diff; интегрирован в `main` |
+| `day-35` | Day 35 «Реальная задача» — Flash Release, `/day-35`, AI release notes по Git и результаты CI; отдельная ветка |
 
 ## Хронология
 
@@ -1010,6 +1011,16 @@ npm run test:files
 Отдельный RAG-индекс не нужен. Используются существующие `OPENAI_*` и профиль
 DeepSeek Flash. Файлы предыдущих дней и read-only режим Day 31 сохраняются.
 Контракты, лимиты и модель доступа — в [руководстве Day 34](docs/file-assistant.md).
+
+### Day 35 · Реальная задача — Flash Release, ветка `day-35`
+
+Автоматизация подготовки релиза: реальные коммиты и diff выбранных веток или
+тегов, AI release notes со ссылками на исходники, риски и рекомендуемые проверки.
+GitHub Actions проверяется для точного SHA; отсутствие CI не считается успехом.
+Markdown можно скачать или сохранить в `docs/releases/` после просмотра diff.
+Запуск: `git switch day-35`, `npm ci`, `npm run dev`, страница `/day-35`.
+Проверки: `npm run test:release`. Подключение, роль AI, API и ограничения —
+в [руководстве Flash Release](https://github.com/mimiq4343/ai-challange/blob/day-35/docs/release.md).
 
 ## SQLite и API Day 7–24
 
