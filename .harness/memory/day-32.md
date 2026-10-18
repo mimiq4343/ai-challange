@@ -2,6 +2,20 @@
 
 Snapshot: 2026-10-18.
 
+- After merging PR #3, the user requested integration with the application's
+  agent and approved the proposed chat design. `/day-32` reuses
+  `DevAssistantWorkspace` and `McpToolChatAgent` with `review_pr` and
+  `review_changes`; manual comparison remains available. Both tools use the
+  shared review runner. They execute locally in the server process because a
+  full review can exceed the existing stdio MCP session's five-minute limit.
+  PR metadata is bound to the current repository; HTTPS fetch retrieves exact
+  base/head objects without checkout, ref updates or writing `FETCH_HEAD`.
+  No GitHub writes occur. Completed reports survive a later final-answer
+  failure, and tab switching keeps the active chat mounted. Each query is
+  independent and at most one review completes per query.
+  On 2026-10-18, the user explicitly approved merging this web agent
+  integration from `day-32-agent` into `main`.
+
 - End-to-end acceptance requires a real PR event, an Actions run and a bot
   review comment. Comparing branches on `/day-32` verifies only the analyzer.
   The user requested pre-created installation and draft test PRs so the

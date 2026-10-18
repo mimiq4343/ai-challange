@@ -1,12 +1,15 @@
 import { z } from "zod";
 
 import type { McpChatEvent } from "./mcp-chat-types";
+import { codeReviewEventSchema } from "./code-review-web-stream";
+import { CODE_REVIEW_WEB_CONFIG } from "./code-review-config";
 
 const mcpChatEventSchema: z.ZodType<McpChatEvent> = z.discriminatedUnion("type", [
   z.object({ type: z.literal("done") }),
   z.object({ type: z.literal("error"), message: z.string() }),
   z.object({ type: z.literal("text"), delta: z.string() }),
   z.object({ type: z.literal("metadata"), headers: z.record(z.string(), z.string()) }),
+  z.object({ type: z.literal("review"), repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/), event: codeReviewEventSchema }),
   z.object({
     type: z.literal("tool-start"),
     callId: z.string(),
@@ -62,10 +65,12 @@ export async function consumeMcpChatStream(
       pending += done ? decoder.decode() : decoder.decode(value, { stream: true });
       let newline: number;
       while ((newline = pending.indexOf("\n")) !== -1) {
+        if (newline > CODE_REVIEW_WEB_CONFIG.maxEventCharacters) throw new Error("Событие ассистента превышает допустимый объём.");
         const line = pending.slice(0, newline);
         pending = pending.slice(newline + 1);
         if (dispatch(line)) return;
       }
+      if (pending.length > CODE_REVIEW_WEB_CONFIG.maxEventCharacters) throw new Error("Событие ассистента превышает допустимый объём.");
       if (done) {
         if (pending && dispatch(pending)) return;
         throw new Error("Ответ оборвался до подтверждения сохранения. Обновите диалог и попробуйте ещё раз.");

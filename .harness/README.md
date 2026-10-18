@@ -60,7 +60,9 @@ updated PR comment in chat; design and implementation planning stayed there.
 The real seeded SQL regression, retrieved context and verification limits are
 recorded in [`reports/day-32/review-quality.md`](reports/day-32/review-quality.md).
 After the user's correction, Day 32 also includes an application page with
-branch selection, streamed progress, diff, findings and RAG sources.
+branch selection, streamed progress, diff, findings and RAG sources. The subsequent
+approved agent integration reuses Flash Dev for natural-language PR and branch
+reviews; the same report records its browser and contract checks.
 
 ## Superpowers designs
 

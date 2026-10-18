@@ -3,8 +3,9 @@
 import { ArrowClockwiseIcon, GitBranchIcon, PlayIcon, StopIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ReviewDiff, ReviewReport } from "@/components/code-review-report";
+import { DevAssistantWorkspace } from "@/components/dev-assistant-workspace";
 import { CODE_REVIEW_CONFIG } from "@/lib/code-review-config";
-import type { CodeReviewReport, ReviewSnapshot, ReviewWorkspace } from "@/lib/code-review-types";
+import type { CodeReviewEvent, CodeReviewReport, ReviewSnapshot, ReviewWorkspace } from "@/lib/code-review-types";
 import { consumeCodeReviewStream } from "@/lib/code-review-web-stream";
 
 const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
@@ -31,10 +32,12 @@ export function CodeReviewWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string[]>([]);
   const [seconds, setSeconds] = useState(0);
-  const [tab, setTab] = useState<"report" | "diff">("diff");
+  const [tab, setTab] = useState<"agent" | "report" | "diff">("agent");
+  const [agentRunning, setAgentRunning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const agentAbortRef = useRef<(() => void) | null>(null);
   const submitRef = useRef<HTMLButtonElement | null>(null);
-  const running = status === "running";
+  const running = status === "running" || agentRunning;
 
   const applyWorkspace = useCallback((value: ReviewWorkspace) => {
     setWorkspace(value);
@@ -90,8 +93,20 @@ export function CodeReviewWorkspace() {
   const selectedBase = workspace?.branches.find((branch) => branch.ref === baseRef);
   const selectedHead = workspace?.branches.find((branch) => branch.ref === headRef);
   const totalFindings = report?.reviews.reduce((count, review) => count + review.findings.length, 0) ?? 0;
+  function applyAgentEvent(event: CodeReviewEvent) {
+    if (event.type === "progress") setProgress(current => [...current.slice(-79), event.message]);
+    if (event.type === "snapshot") setSnapshot(event.snapshot);
+    if (event.type === "result") { setReport(event.report); setSnapshot(event.report.snapshot); setStatus("done"); }
+    if (event.type === "error") { setError(event.message); setStatus("error"); }
+  }
+  function agentStateChanged(value: "running" | "done" | "error" | "stopped", cancel?: () => void) {
+    setAgentRunning(value === "running");
+    agentAbortRef.current = cancel ?? null;
+    if (value === "running") { setStatus("idle"); setReport(null); setSnapshot(null); setProgress([]); setError(null); setSeconds(0); }
+    else if (value !== "done") setStatus(value);
+  }
   return <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(18rem,0.32fr)_minmax(0,1fr)]">
-    <aside className="min-w-0 space-y-4">
+    <aside className="order-2 min-w-0 space-y-4 lg:order-1">
       <section className={CARD} aria-label="Настройки ревью">
         <div className="flex items-center justify-between gap-3"><h2 className="flex items-center gap-2 text-sm font-semibold"><GitBranchIcon size={18} aria-hidden />Сравнение веток</h2><button type="button" aria-label="Обновить список веток" title="Обновить список веток" disabled={loading || running} onClick={() => void reloadBranches()} className={`flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-xl border border-line text-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS}`}><ArrowClockwiseIcon size={18} aria-hidden className={loading ? "animate-spin motion-reduce:animate-none" : ""} /></button></div>
         {workspace && <a href={`https://github.com/${workspace.repository}`} target="_blank" rel="noreferrer" className={`mt-1 inline-flex min-h-11 max-w-full items-center rounded text-xs text-accent break-all ${FOCUS}`}>{workspace.repository}</a>}
@@ -106,7 +121,7 @@ export function CodeReviewWorkspace() {
           </select>{selectedHead && <span className="mt-1.5 block font-mono text-[11px]">{selectedHead.sha.slice(0, 12)}</span>}</label>
           <p className="text-xs leading-relaxed text-muted">Будут проверены закоммиченные изменения относительно общей базы веток. Незакоммиченные правки в ревью не входят.</p>
           <button ref={submitRef} type="submit" disabled={loading || running || !workspace || !baseRef || !headRef} className={`flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS}`}><PlayIcon size={17} weight="fill" aria-hidden />{running ? "Выполняется ревью…" : "Запустить ревью"}</button>
-          {running && <button type="button" onClick={() => abortRef.current?.abort()} className={`flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-line px-4 text-sm text-muted hover:text-foreground ${FOCUS}`}><StopIcon size={17} aria-hidden />Остановить ревью</button>}
+          {running && <button type="button" onClick={() => agentRunning ? agentAbortRef.current?.() : abortRef.current?.abort()} className={`flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-line px-4 text-sm text-muted hover:text-foreground ${FOCUS}`}><StopIcon size={17} aria-hidden />Остановить ревью</button>}
         </form>
         <p className="mt-4 text-xs leading-relaxed text-muted">Результат появится здесь. Комментарий в GitHub при ручном запуске не публикуется.</p>
       </section>
@@ -119,12 +134,16 @@ export function CodeReviewWorkspace() {
         {progress.length > 0 && <details className="mt-3 rounded-xl border border-line"><summary className={`min-h-11 cursor-pointer rounded-xl p-3 text-xs text-muted ${FOCUS}`}>Журнал анализа · {progress.length}</summary><ol className="max-h-72 space-y-2 overflow-y-auto border-t border-line p-3 text-xs leading-relaxed text-muted">{progress.map((message, index) => <li key={index} className="break-words [overflow-wrap:anywhere]">{message}</li>)}</ol></details>}
       </section>
     </aside>
-    <section className={`${CARD} space-y-5`} aria-label="Область ревью" aria-busy={running}>
+    <section className={`${CARD} order-1 space-y-5 lg:order-2`} aria-label="Область ревью" aria-busy={running}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
-        <div className="flex gap-2" role="group" aria-label="Представление ревью">{[{ value: "diff", label: "Diff и файлы" }, { value: "report", label: "Результат ревью" }].map(({ value, label }) => <button type="button" key={value} aria-pressed={tab === value} onClick={() => setTab(value as "diff" | "report")} className={`min-h-11 cursor-pointer rounded-xl border px-3 text-xs font-medium transition-colors ${tab === value ? "border-accent/30 bg-accent/10 text-accent" : "border-line text-muted hover:text-foreground"} ${FOCUS}`}>{label}</button>)}</div>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Представление ревью">{[{ value: "agent", label: "Чат с агентом" }, { value: "diff", label: "Diff и файлы" }, { value: "report", label: "Результат ревью" }].map(({ value, label }) => <button type="button" key={value} aria-pressed={tab === value} onClick={() => setTab(value as "agent" | "diff" | "report")} className={`min-h-11 cursor-pointer rounded-xl border px-3 text-xs font-medium transition-colors ${tab === value ? "border-accent/30 bg-accent/10 text-accent" : "border-line text-muted hover:text-foreground"} ${FOCUS}`}>{label}</button>)}</div>
         {snapshot && <p className="text-xs text-muted">Файлов: {snapshot.totalFiles}{report ? ` · замечаний: ${totalFindings}` : ""}</p>}
       </div>
-      {tab === "diff" ? snapshot ? <ReviewDiff snapshot={snapshot} /> : <EmptyState running={running} /> : report && workspace ? <ReviewReport report={report} repository={workspace.repository} /> : <p className="py-10 text-sm text-muted">{running ? "Ассистент анализирует изменения. Результат появится после завершения ревью." : "Отчёт появится после запуска и завершения ревью."}</p>}
+      <div hidden={tab !== "agent"}>
+        <DevAssistantWorkspace model={CODE_REVIEW_CONFIG.model} index={null} review={{ baseRef, headRef, disabled: loading || !workspace || status === "running", onEvent: applyAgentEvent, onStateChange: agentStateChanged }} />
+      </div>
+      {tab === "diff" && (snapshot ? <ReviewDiff snapshot={snapshot} /> : <EmptyState running={running} />)}
+      {tab === "report" && (report && workspace ? <ReviewReport report={report} repository={workspace.repository} /> : <p className="py-10 text-sm text-muted">{running ? "Ассистент анализирует изменения. Результат появится после завершения ревью." : "Отчёт появится после запуска и завершения ревью."}</p>)}
     </section>
   </div>;
 }

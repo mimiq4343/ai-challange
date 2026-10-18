@@ -13,7 +13,9 @@ export type McpToolEvent =
 
 export type McpChatEvent =
   | McpToolEvent
+  | { type: "review"; repository: string; event: CodeReviewEvent }
   | { type: "metadata"; headers: Record<string, string> }
   | { type: "text"; delta: string }
   | { type: "done" }
   | { type: "error"; message: string };
+import type { CodeReviewEvent } from "./code-review-types";

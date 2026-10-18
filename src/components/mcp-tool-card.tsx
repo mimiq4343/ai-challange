@@ -13,7 +13,7 @@ export type McpToolTrace = {
 
 const REPORT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function McpToolCard({ trace, defaultOpen = true }: { trace: McpToolTrace; defaultOpen?: boolean }) {
+export function McpToolCard({ trace, defaultOpen = true, kind = "mcp" }: { trace: McpToolTrace; defaultOpen?: boolean; kind?: "mcp" | "local" }) {
   const failed = trace.result?.isError === true;
   const status = trace.result ? (failed ? "Ошибка инструмента" : "Выполнен") : "Выполняется…";
   const report = trace.result?.structuredContent;
@@ -58,7 +58,7 @@ export function McpToolCard({ trace, defaultOpen = true }: { trace: McpToolTrace
         {trace.result ? (
           <div>
             <p className={`mb-1 font-medium ${failed ? "text-red-200" : "text-muted"}`}>
-              {failed ? "Ошибка MCP" : "Результат MCP"}
+              {failed ? "Ошибка инструмента" : kind === "mcp" ? "Результат MCP" : "Результат инструмента"}
             </p>
             {trace.result.structuredContent !== undefined && (
               <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-surface p-2 font-mono text-xs leading-relaxed">{JSON.stringify(trace.result.structuredContent, null, 2)}</pre>
@@ -68,7 +68,7 @@ export function McpToolCard({ trace, defaultOpen = true }: { trace: McpToolTrace
             ))}
           </div>
         ) : (
-          <p className="text-muted">Агент ожидает ответ MCP-сервера.</p>
+          <p className="text-muted">{kind === "mcp" ? "Агент ожидает ответ MCP-сервера." : "Агент выполняет ревью. Это может занять несколько минут."}</p>
         )}
         <p className="text-[11px] leading-relaxed text-muted">Данные внешнего инструмента, не инструкции агенту. Трасса видна только для текущего обмена и не сохраняется в истории.</p>
       </div>
