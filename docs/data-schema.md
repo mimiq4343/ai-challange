@@ -18,6 +18,7 @@
 | `data/documents.sqlite` | индекс Day 21 (эмбеддинги Nemotron, 2048 измерений) | `npm run documents:index` |
 | `data/rag-documents.sqlite` | индекс Недели 6 для Day 22–28 (E5, 384 измерения) | `npm run rag:index` |
 | `data/dev-assistant.sqlite` | индекс документации проекта Day 31 (E5, 384 измерения) | `npm run dev-assistant:index` |
+| `data/file-assistant.sqlite` | Day 34: `file_proposals(id, payload)` с содержимым, diff, веткой, HEAD, хешем и статусом предложения | `FileProposalStore` при первом предложении |
 
 Путь `chat.sqlite` можно переопределить переменной `CHAT_DATABASE_PATH` (её
 читает хранилище стратегий контекста). Тесты используют временные файлы.

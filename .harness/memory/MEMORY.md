@@ -37,6 +37,7 @@ them against the current sources before relying on them.
 - [day-31.md](day-31.md) — developer assistant: `/help` tool-loop over a stdio project MCP server, docs RAG index, browser script and environment findings.
 - [day-32.md](day-32.md) — automated PR review: Flash Dev web agent, branch comparison, trusted workflow checkout, docs/code RAG and validated findings.
 - [day-33.md](day-33.md) — Flash Support: ticket-scoped JSON MCP, FAQ RAG, atomic exchanges and browser focus findings.
+- [day-34.md](day-34.md) — Flash Files: scoped project-file MCP tools, document proposals, guarded Apply and keyboard focus verification.
 
 Approved designs and implementation plans live outside memory, in
 [`../superpowers/`](../superpowers); the workspace index is [`../README.md`](../README.md).

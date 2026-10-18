@@ -22,12 +22,13 @@ export async function withProjectMcpTools<T>(
   callerSignal: AbortSignal,
   operation: (session: McpToolSession) => Promise<T>,
   root: string = process.cwd(),
+  files = false,
 ): Promise<T> {
   callerSignal.throwIfAborted();
   const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(MCP_SESSION_TIMEOUT_MS)]);
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: ["--conditions=react-server", "--import", "tsx", PROJECT_MCP_SERVER_SCRIPT, resolve(root)],
+    args: ["--conditions=react-server", "--import", "tsx", PROJECT_MCP_SERVER_SCRIPT, resolve(root), ...(files ? ["--files"] : [])],
     cwd: process.cwd(),
     stderr: "inherit",
   });

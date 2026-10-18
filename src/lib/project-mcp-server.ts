@@ -5,6 +5,7 @@ import type { DocumentEmbeddingClient } from "./document-embeddings";
 import { createDocsSearch, ProjectDocsError } from "./project-docs";
 import { listTrackedEntries, ProjectGitError, readGitBranch, readGitDiff, readGitStatus } from "./project-git";
 import { normalizeProjectPath, projectToolOutputSchemas as outputs, projectToolSchemas as inputs } from "./project-tool-schemas";
+import { registerFileAssistantTools } from "./file-assistant-mcp";
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 
@@ -21,10 +22,10 @@ async function toolResult(read: () => Promise<object>): Promise<CallToolResult> 
   }
 }
 
-export function createProjectMcpServer(root: string, embedder: Pick<DocumentEmbeddingClient, "embed">): McpServer {
+export function createProjectMcpServer(root: string, embedder: Pick<DocumentEmbeddingClient, "embed">, files = false): McpServer {
   const server = new McpServer({ name: "flash-project", version: "1.0.0" });
   const searchDocs = createDocsSearch(root, embedder);
-  server.registerTool("search_docs", {
+  if (!files) server.registerTool("search_docs", {
     description: "Семантический поиск по документации проекта: README.md, AGENTS.md, docs/ и SQL-схемам src/lib/*-schema.ts. Возвращает фрагменты с id S1, S2, … для ссылок.",
     inputSchema: inputs.search_docs,
     outputSchema: outputs.search_docs,
@@ -48,11 +49,12 @@ export function createProjectMcpServer(root: string, embedder: Pick<DocumentEmbe
     outputSchema: outputs.list_files,
     annotations: READ_ONLY,
   }, ({ path }, extra) => toolResult(() => listTrackedEntries(root, normalizeProjectPath(path), extra.signal)));
-  server.registerTool("git_diff", {
+  if (!files) server.registerTool("git_diff", {
     description: `Diff рабочего дерева и индекса относительно HEAD, со сводкой --stat; патч обрезается до ${LIMITS.maxDiffCharacters} символов. Неотслеживаемые файлы не входят.`,
     inputSchema: inputs.git_diff,
     outputSchema: outputs.git_diff,
     annotations: READ_ONLY,
   }, ({ path }, extra) => toolResult(() => readGitDiff(root, normalizeProjectPath(path), extra.signal)));
+  if (files) registerFileAssistantTools(server, root);
   return server;
 }

@@ -25,6 +25,7 @@ export async function readMcpProviderRound(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
   maxToolsPerRound: number = LIMITS.maxToolsPerRound,
+  maxArgumentsBytes: number = LIMITS.maxArgumentsBytes,
 ): Promise<ProviderToolRound> {
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -82,7 +83,7 @@ export async function readMcpProviderRound(
             if (typeof value === "string") call.function[key] += value;
           }
         }
-        if (Buffer.byteLength(call.id) > LIMITS.maxCallIdBytes || Buffer.byteLength(call.function.name) > LIMITS.maxCallIdBytes || Buffer.byteLength(call.function.arguments) > LIMITS.maxArgumentsBytes) {
+        if (Buffer.byteLength(call.id) > LIMITS.maxCallIdBytes || Buffer.byteLength(call.function.name) > LIMITS.maxCallIdBytes || Buffer.byteLength(call.function.arguments) > maxArgumentsBytes) {
           throw new ChatAgentError("Вызов инструмента превышает допустимый размер.", "upstream");
         }
         calls.set(index, call);
